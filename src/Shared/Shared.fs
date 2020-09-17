@@ -29,8 +29,8 @@ type PackageVersionDiff = {
 type PaketDiff = {
     Additions : Package list
     Removals : Package list
-    VersionIncreases : PackageVersionDiff list
-    VersionDecreases : PackageVersionDiff list
+    VersionUpgrades : PackageVersionDiff list
+    VersionDowngrades : PackageVersionDiff list
 }
 
 module Route =

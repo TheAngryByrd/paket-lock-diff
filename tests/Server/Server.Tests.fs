@@ -57,36 +57,36 @@ let paketCompareTests = testList "Paket Compare" [
             ]
         Expect.sequenceEqual result.Additions [] ""
         Expect.sequenceEqual result.Removals expectedRemovals ""
-        Expect.sequenceEqual result.VersionIncreases [] ""
-        Expect.sequenceEqual result.VersionDecreases [] ""
+        Expect.sequenceEqual result.VersionUpgrades [] ""
+        Expect.sequenceEqual result.VersionDowngrades [] ""
     }
-    testCaseAsync "Version Increases" <| async {
+    testCaseAsync "Version Upgrades" <| async {
         let older = "./paket-lock-files/version-increase-tests/old-paket.lock" |> readFile
         let newer = "./paket-lock-files/version-increase-tests/new-paket.lock" |> readFile
         let result = PaketComparer.compare(older, newer)
 
-        let expectedIncreases =
+        let expectedUpgrades =
             [
                 createPackageVersionDiff "main" "FsToolkit.ErrorHandling" "1.4.0" "1.4.3"
             ]
         Expect.sequenceEqual result.Additions [] ""
         Expect.sequenceEqual result.Removals [] ""
-        Expect.sequenceEqual result.VersionIncreases expectedIncreases ""
-        Expect.sequenceEqual result.VersionDecreases [] ""
+        Expect.sequenceEqual result.VersionUpgrades expectedUpgrades ""
+        Expect.sequenceEqual result.VersionDowngrades [] ""
     }
-    testCaseAsync "Version Decreases" <| async {
+    testCaseAsync "Version Downgrades" <| async {
         let older = "./paket-lock-files/version-decrease-tests/old-paket.lock" |> readFile
         let newer = "./paket-lock-files/version-decrease-tests/new-paket.lock" |> readFile
         let result = PaketComparer.compare(older, newer)
 
-        let expectedIncreases =
+        let expectedUpgrades =
             [
                 createPackageVersionDiff "main" "FsToolkit.ErrorHandling" "1.4.3" "1.4.0"
             ]
         Expect.sequenceEqual result.Additions [] ""
         Expect.sequenceEqual result.Removals [] ""
-        Expect.sequenceEqual result.VersionIncreases [] ""
-        Expect.sequenceEqual result.VersionDecreases expectedIncreases ""
+        Expect.sequenceEqual result.VersionUpgrades [] ""
+        Expect.sequenceEqual result.VersionDowngrades expectedUpgrades ""
     }
 ]
 

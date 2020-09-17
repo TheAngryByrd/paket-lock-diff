@@ -85,7 +85,6 @@ let compareResults (model : PaketDiff) (dispatch : Msg -> unit) =
         xs
         |> List.groupBy(fun g -> g.GroupName)
         |> List.collect(fun (groupName, packages) ->
-            printfn "%A groupname" groupName
             [
                 p [ ] [ str groupName ]
                 for x in packages do
@@ -98,7 +97,6 @@ let compareResults (model : PaketDiff) (dispatch : Msg -> unit) =
         xs
         |> List.groupBy(fun g -> g.GroupName)
         |> List.collect(fun (groupName, packages) ->
-            printfn "%A groupname" groupName
             [
                 p [ ] [ str groupName ]
                 for x in packages do
@@ -107,47 +105,73 @@ let compareResults (model : PaketDiff) (dispatch : Msg -> unit) =
                     ]
             ]
         )
-    Column.column [Column.Width (Screen.All, Column.Is12)] [
-        Container.container [] [
-            Tile.ancestor [ ]
-                [
-                    Tile.parent [ Tile.IsVertical
-                                  Tile.Size Tile.Is6 ]
-                        [ Tile.child [ ] [
-                            Box.box' [ ] [
-                                Heading.p [ ]
-                                    [ str <| sprintf "Additions - %d" model.Additions.Length ]
-                                yield! printPackage model.Additions
-                            ]
-
-                            ]
-                          Tile.child [ ]
-                            [ Box.box' [ ]
-                                [ Heading.p [ ]
-                                    [ str <| sprintf "Removals - %d" model.Removals.Length ]
-
-                                  yield! printPackage model.Removals
-                                ]
-                            ]
-                        ]
-                    Tile.parent [   Tile.IsVertical
-                                    Tile.Size Tile.Is6 ]
-                        [ Tile.child [ ]
-                            [ Box.box' [ ]
-                                [ Heading.p [ ]
-                                    [ str <| sprintf "Version Increases - %d" model.VersionIncreases.Length]
-                                  yield! printVersionDiff model.VersionIncreases
-                                ] ]
-                          Tile.child [ ]
-                            [ Box.box' [ ]
-                                [ Heading.p [ ]
-                                    [ str <| sprintf "Version Decreases - %d" model.VersionDecreases.Length ]
-                                  yield! printVersionDiff model.VersionDecreases
-                                ] ]
-                        ]
-                ]
+    Container.container [] [
+        Box.box' [] [
+            Heading.p [ ] [
+                str <| sprintf "Additions - %d" model.Additions.Length
+            ]
+            yield! printPackage model.Additions
+        ]
+        Box.box' [] [
+            Heading.p [ ] [
+                str <| sprintf "Removals - %d" model.Removals.Length
+            ]
+            yield! printPackage model.Removals
+        ]
+        Box.box' [] [
+            Heading.p [ ] [
+                str <| sprintf "Version Upgrades - %d" model.VersionUpgrades.Length
+            ]
+            yield! printVersionDiff model.VersionUpgrades
+        ]
+        Box.box' [] [
+            Heading.p [ ] [
+                str <| sprintf "Version Downgrades - %d" model.VersionDowngrades.Length
+            ]
+            yield! printVersionDiff model.VersionDowngrades
         ]
     ]
+    // Column.column [Column.Width (Screen.All, Column.Is12)] [
+    //     Container.container [] [
+    //         Tile.ancestor [ ]
+    //             [
+    //                 Tile.parent [ Tile.IsVertical
+    //                               Tile.Size Tile.Is6 ]
+    //                     [ Tile.child [ ] [
+    //                         Box.box' [ ] [
+    //                             Heading.p [ ]
+    //                                 [ str <| sprintf "Additions - %d" model.Additions.Length ]
+    //                             yield! printPackage model.Additions
+    //                         ]
+
+    //                         ]
+    //                       Tile.child [ ]
+    //                         [ Box.box' [ ]
+    //                             [ Heading.p [ ]
+    //                                 [ str <| sprintf "Removals - %d" model.Removals.Length ]
+
+    //                               yield! printPackage model.Removals
+    //                             ]
+    //                         ]
+    //                     ]
+    //                 Tile.parent [   Tile.IsVertical
+    //                                 Tile.Size Tile.Is6 ]
+    //                     [ Tile.child [ ]
+    //                         [ Box.box' [ ]
+    //                             [ Heading.p [ ]
+    //                                 [ str <| sprintf "Version Upgrades - %d" model.VersionUpgrades.Length]
+    //                               yield! printVersionDiff model.VersionUpgrades
+    //                             ] ]
+    //                       Tile.child [ ]
+    //                         [ Box.box' [ ]
+    //                             [ Heading.p [ ]
+    //                                 [ str <| sprintf "Version Downgrades - %d" model.VersionDowngrades.Length ]
+    //                               yield! printVersionDiff model.VersionDowngrades
+    //                             ] ]
+    //                     ]
+    //             ]
+    //     ]
+    // ]
 
 let diffBoxes (model : Model) (dispatch : Msg -> unit) =
     Columns.columns [] [

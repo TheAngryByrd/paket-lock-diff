@@ -36,8 +36,8 @@ module PaketComparer =
     type Diff = {
         Additions : Package list
         Removals : Package list
-        VersionIncreases : PackageVersionDiff list
-        VersionDecreases : PackageVersionDiff list
+        VersionUpgrades : PackageVersionDiff list
+        VersionDowngrades : PackageVersionDiff list
     }
 
     let diffToDTO ( d : Diff) =
@@ -57,8 +57,8 @@ module PaketComparer =
         {
             PaketDiff.Additions = d.Additions |> List.map toPackageDTO
             Removals = d.Removals |> List.map toPackageDTO
-            VersionIncreases = d.VersionIncreases |> List.map toPackageVersionDiffDTO
-            VersionDecreases = d.VersionDecreases |> List.map toPackageVersionDiffDTO
+            VersionUpgrades = d.VersionUpgrades |> List.map toPackageVersionDiffDTO
+            VersionDowngrades = d.VersionDowngrades |> List.map toPackageVersionDiffDTO
         }
 
     let compare (older, newer) =
@@ -111,15 +111,15 @@ module PaketComparer =
             packagesChanged
             |> List.filter(fun p -> p.OlderVersion < p.NewerVersion)
 
-        let versionDecreases =
+        let versionDowngrades =
             packagesChanged
             |> List.filter(fun p -> p.OlderVersion > p.NewerVersion)
 
         {
             Additions = additions
             Removals = removals
-            VersionIncreases = versionIncreaes
-            VersionDecreases = versionDecreases
+            VersionUpgrades = versionIncreaes
+            VersionDowngrades = versionDowngrades
         }
 
 let todosApi =

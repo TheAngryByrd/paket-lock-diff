@@ -14,6 +14,13 @@ let paketCompareTests = testList "Paket Compare" [
             PackageName packageName,
             SemVer.Parse version
         )
+    let createPackageVersionDiff groupName packageName olderVersion newerVersion =
+        {
+            PaketComparer.PackageVersionDiff.GroupName = GroupName groupName
+            PaketComparer.PackageVersionDiff.PackageName = PackageName packageName
+            PaketComparer.PackageVersionDiff.OlderVersion = SemVer.Parse olderVersion
+            PaketComparer.PackageVersionDiff.NewerVersion = SemVer.Parse newerVersion
+        }
     testCaseAsync "Additions" <| async {
         let older = "./paket-lock-files/addition-tests/old-paket.lock"
         let newer = "./paket-lock-files/addition-tests/new-paket.lock"
@@ -36,8 +43,6 @@ let paketCompareTests = testList "Paket Compare" [
             ]
         Expect.sequenceEqual result.Additions expectedAdditions ""
         Expect.sequenceEqual result.Removals [] ""
-        Expect.sequenceEqual result.VersionIncreases [] ""
-        Expect.sequenceEqual result.VersionDecreases [] ""
     }
     testCaseAsync "Removals" <| async {
         let older = "./paket-lock-files/removal-tests/old-paket.lock"
@@ -52,6 +57,34 @@ let paketCompareTests = testList "Paket Compare" [
         Expect.sequenceEqual result.Removals expectedRemovals ""
         Expect.sequenceEqual result.VersionIncreases [] ""
         Expect.sequenceEqual result.VersionDecreases [] ""
+    }
+    testCaseAsync "Version Increases" <| async {
+        let older = "./paket-lock-files/version-increase-tests/old-paket.lock"
+        let newer = "./paket-lock-files/version-increase-tests/new-paket.lock"
+        let result = PaketComparer.compare(older, newer)
+
+        let expectedIncreases =
+            [
+                createPackageVersionDiff "main" "FsToolkit.ErrorHandling" "1.4.0" "1.4.3"
+            ]
+        Expect.sequenceEqual result.Additions [] ""
+        Expect.sequenceEqual result.Removals [] ""
+        Expect.sequenceEqual result.VersionIncreases expectedIncreases ""
+        Expect.sequenceEqual result.VersionDecreases [] ""
+    }
+    testCaseAsync "Version Decreases" <| async {
+        let older = "./paket-lock-files/version-decrease-tests/old-paket.lock"
+        let newer = "./paket-lock-files/version-decrease-tests/new-paket.lock"
+        let result = PaketComparer.compare(older, newer)
+
+        let expectedIncreases =
+            [
+                createPackageVersionDiff "main" "FsToolkit.ErrorHandling" "1.4.3" "1.4.0"
+            ]
+        Expect.sequenceEqual result.Additions [] ""
+        Expect.sequenceEqual result.Removals [] ""
+        Expect.sequenceEqual result.VersionIncreases [] ""
+        Expect.sequenceEqual result.VersionDecreases expectedIncreases ""
     }
 ]
 

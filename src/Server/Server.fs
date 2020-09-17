@@ -24,8 +24,8 @@ module PaketComparer =
     type PackageVersionDiff = {
         GroupName : GroupName
         PackageName : PackageName
-        PreviousVersion : SemVerInfo
-        PostVersion : SemVerInfo
+        OlderVersion : SemVerInfo
+        NewerVersion : SemVerInfo
     }
 
     type Diff = {
@@ -34,32 +34,61 @@ module PaketComparer =
         VersionIncreases : PackageVersionDiff list
         VersionDecreases : PackageVersionDiff list
     }
+
     let compare (older, newer) =
         let olderPaketLock = Paket.LockFile.LoadFrom older
-        let olderSet = olderPaketLock.InstalledPackages |> Set
+
+        // Need sets without version numbers
+        let olderSet =
+            olderPaketLock.InstalledPackages
+            |> Set
+            |> Set.map(fun (g,p,v) -> g,p)
         let newerPaketLock = Paket.LockFile.LoadFrom newer
-        let newerSet = newerPaketLock.InstalledPackages |> Set
+        let newerSet =
+            newerPaketLock.InstalledPackages
+            |> Set
+            |> Set.map(fun (g,p,v) -> g,p)
         let findPackageByGroupAndName packages (groupName, packageName) =
             packages
             |> List.tryFind(fun (g1,p1,_) -> groupName = g1 && packageName = p1)
+
         let additions =
-            // Need sets without version numbers
-            let os1 = olderSet |> Set.map(fun (g,p,v) -> g,p)
-            let ns1 = newerSet |> Set.map(fun (g,p,v) -> g,p)
-            Set.difference ns1 os1
+            Set.difference newerSet olderSet
             |> Set.toList
             |> List.choose(findPackageByGroupAndName newerPaketLock.InstalledPackages)
             |> List.map Package.OfTuple
         let removals =
             // Need sets without version numbers
-            let os1 = olderSet |> Set.map(fun (g,p,v) -> g,p)
-            let ns1 = newerSet |> Set.map(fun (g,p,v) -> g,p)
-            Set.difference os1 ns1
+            Set.difference olderSet newerSet
             |> Set.toList
             |> List.choose(findPackageByGroupAndName olderPaketLock.InstalledPackages)
             |> List.map Package.OfTuple
-        let versionIncreaes = []
-        let versionDecreases = []
+
+        let packagesChanged =
+            Set.intersect olderSet newerSet
+            |> Set.toList
+            |> List.choose(fun (g,p) ->
+                let older = findPackageByGroupAndName olderPaketLock.InstalledPackages (g,p)
+                let newer = findPackageByGroupAndName newerPaketLock.InstalledPackages (g,p)
+                match older, newer with
+                | Some (_,_,olderVersion), Some (_,_,newerVersion)  ->
+                    Some {
+                        GroupName = g
+                        PackageName = p
+                        OlderVersion = olderVersion
+                        NewerVersion = newerVersion
+                    }
+                | _ -> None
+            )
+
+        let versionIncreaes =
+            packagesChanged
+            |> List.filter(fun p -> p.OlderVersion < p.NewerVersion)
+
+        let versionDecreases =
+            packagesChanged
+            |> List.filter(fun p -> p.OlderVersion > p.NewerVersion)
+
         {
             Additions = additions
             Removals = removals

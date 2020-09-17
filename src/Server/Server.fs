@@ -6,6 +6,60 @@ open Saturn
 
 open Shared
 
+module PaketComparer =
+    open Paket
+    open Paket.Domain
+    type Package = {
+        GroupName : GroupName
+        PackageName : PackageName
+        Version : SemVerInfo
+    }
+        with
+            static member OfTuple (groupName, packageName, version) =
+                {
+                    GroupName = groupName
+                    PackageName = packageName
+                    Version = version
+                }
+    type PackageVersionDiff = {
+        GroupName : GroupName
+        PackageName : PackageName
+        PreviousVersion : SemVerInfo
+        PostVersion : SemVerInfo
+    }
+
+    type Diff = {
+        Additions : Package list
+        Removals : Package list
+        VersionIncreases : PackageVersionDiff list
+        VersionDecreases : PackageVersionDiff list
+    }
+    let compare (older, newer) =
+        let olderPaketLock = Paket.LockFile.LoadFrom older
+        let olderSet = olderPaketLock.InstalledPackages |> Set
+        let newerPaketLock = Paket.LockFile.LoadFrom newer
+        let newerSet = newerPaketLock.InstalledPackages |> Set
+        let findPackageByGroupAndName packages (groupName, packageName) =
+            packages
+            |> List.tryFind(fun (g1,p1,_) -> groupName = g1 && packageName = p1)
+        let additions =
+            // Need sets without version numbers
+            let os1 = olderSet |> Set.map(fun (g,p,v) -> g,p)
+            let ns1 = newerSet |> Set.map(fun (g,p,v) -> g,p)
+            Set.difference ns1 os1
+            |> Set.toList
+            |> List.choose(findPackageByGroupAndName newerPaketLock.InstalledPackages)
+            |> List.map Package.OfTuple
+        let removals = []
+        let versionIncreaes = []
+        let versionDecreases = []
+        {
+            Additions = additions
+            Removals = removals
+            VersionIncreases = versionIncreaes
+            VersionDecreases = versionDecreases
+        }
+
 type Storage () =
     let todos = ResizeArray<_>()
 

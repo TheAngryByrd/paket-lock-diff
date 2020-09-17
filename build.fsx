@@ -49,7 +49,7 @@ Target.create "Bundle" (fun _ ->
 
 Target.create "Azure" (fun _ ->
     let web = webApp {
-        name "paket_diff"
+        name "paket_lock_diff"
         zip_deploy "deploy"
     }
     let deployment = arm {

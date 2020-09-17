@@ -2,6 +2,7 @@ module Server.Tests
 
 open Expecto
 
+open System
 open Shared
 open Server
 open Paket
@@ -21,9 +22,10 @@ let paketCompareTests = testList "Paket Compare" [
             PaketComparer.PackageVersionDiff.OlderVersion = SemVer.Parse olderVersion
             PaketComparer.PackageVersionDiff.NewerVersion = SemVer.Parse newerVersion
         }
+    let readFile = IO.File.ReadAllText >> String.splitByNewlines
     testCaseAsync "Additions" <| async {
-        let older = "./paket-lock-files/addition-tests/old-paket.lock"
-        let newer = "./paket-lock-files/addition-tests/new-paket.lock"
+        let older = "./paket-lock-files/addition-tests/old-paket.lock" |> readFile
+        let newer = "./paket-lock-files/addition-tests/new-paket.lock" |> readFile
         let result = PaketComparer.compare(older, newer)
 
         let expectedAdditions =
@@ -45,8 +47,8 @@ let paketCompareTests = testList "Paket Compare" [
         Expect.sequenceEqual result.Removals [] ""
     }
     testCaseAsync "Removals" <| async {
-        let older = "./paket-lock-files/removal-tests/old-paket.lock"
-        let newer = "./paket-lock-files/removal-tests/new-paket.lock"
+        let older = "./paket-lock-files/removal-tests/old-paket.lock" |> readFile
+        let newer = "./paket-lock-files/removal-tests/new-paket.lock" |> readFile
         let result = PaketComparer.compare(older, newer)
 
         let expectedRemovals =
@@ -59,8 +61,8 @@ let paketCompareTests = testList "Paket Compare" [
         Expect.sequenceEqual result.VersionDecreases [] ""
     }
     testCaseAsync "Version Increases" <| async {
-        let older = "./paket-lock-files/version-increase-tests/old-paket.lock"
-        let newer = "./paket-lock-files/version-increase-tests/new-paket.lock"
+        let older = "./paket-lock-files/version-increase-tests/old-paket.lock" |> readFile
+        let newer = "./paket-lock-files/version-increase-tests/new-paket.lock" |> readFile
         let result = PaketComparer.compare(older, newer)
 
         let expectedIncreases =
@@ -73,8 +75,8 @@ let paketCompareTests = testList "Paket Compare" [
         Expect.sequenceEqual result.VersionDecreases [] ""
     }
     testCaseAsync "Version Decreases" <| async {
-        let older = "./paket-lock-files/version-decrease-tests/old-paket.lock"
-        let newer = "./paket-lock-files/version-decrease-tests/new-paket.lock"
+        let older = "./paket-lock-files/version-decrease-tests/old-paket.lock" |> readFile
+        let newer = "./paket-lock-files/version-decrease-tests/new-paket.lock" |> readFile
         let result = PaketComparer.compare(older, newer)
 
         let expectedIncreases =

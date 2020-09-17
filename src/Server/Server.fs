@@ -3,8 +3,13 @@ module Server
 open Fable.Remoting.Server
 open Fable.Remoting.Giraffe
 open Saturn
-
 open Shared
+
+module String =
+    open System
+    let splitByNewlines (s : string) =
+        // s.Split([|'\n'; '\r'|]) Using an array seems to trim the output also. WHY?
+        s.Split('\n') |> Array.collect(fun x -> x.Split('\r'))
 
 module PaketComparer =
     open Paket
@@ -35,15 +40,36 @@ module PaketComparer =
         VersionDecreases : PackageVersionDiff list
     }
 
+    let diffToDTO ( d : Diff) =
+        let toPackageDTO (p : Package) =
+            {
+                Shared.Package.GroupName = p.GroupName.Name
+                PackageName = p.PackageName.Name
+                Version = p.Version.Normalize()
+            }
+        let toPackageVersionDiffDTO (p : PackageVersionDiff) =
+            {
+                Shared.PackageVersionDiff.GroupName = p.GroupName.Name
+                PackageName = p.PackageName.Name
+                OlderVersion = p.OlderVersion.Normalize()
+                NewerVersion = p.NewerVersion.Normalize()
+            }
+        {
+            PaketDiff.Additions = d.Additions |> List.map toPackageDTO
+            Removals = d.Removals |> List.map toPackageDTO
+            VersionIncreases = d.VersionIncreases |> List.map toPackageVersionDiffDTO
+            VersionDecreases = d.VersionDecreases |> List.map toPackageVersionDiffDTO
+        }
+
     let compare (older, newer) =
-        let olderPaketLock = Paket.LockFile.LoadFrom older
+        let olderPaketLock = Paket.LockFile.Parse("old.lock", older)
 
         // Need sets without version numbers
         let olderSet =
             olderPaketLock.InstalledPackages
             |> Set
             |> Set.map(fun (g,p,v) -> g,p)
-        let newerPaketLock = Paket.LockFile.LoadFrom newer
+        let newerPaketLock = Paket.LockFile.Parse("new.lock", newer)
         let newerSet =
             newerPaketLock.InstalledPackages
             |> Set
@@ -96,6 +122,7 @@ module PaketComparer =
             VersionDecreases = versionDecreases
         }
 
+
 type Storage () =
     let todos = ResizeArray<_>()
 
@@ -115,13 +142,21 @@ storage.AddTodo(Todo.create "Write your app") |> ignore
 storage.AddTodo(Todo.create "Ship it !!!") |> ignore
 
 let todosApi =
-    { getTodos = fun () -> async { return storage.GetTodos() }
-      addTodo =
-        fun todo -> async {
-            match storage.AddTodo todo with
-            | Ok () -> return todo
-            | Error e -> return failwith e
-        } }
+    {
+        getTodos = fun () -> async { return storage.GetTodos() }
+        addTodo =
+            fun todo -> async {
+                match storage.AddTodo todo with
+                | Ok () -> return todo
+                | Error e -> return failwith e
+            }
+        comparePaketLocks = fun paketFiles -> async {
+            let olderSplit = paketFiles.OlderLockFile |> String.splitByNewlines
+            let newerSplit = paketFiles.NewerLockFile |> String.splitByNewlines
+            let comparison = PaketComparer.compare(olderSplit, newerSplit)
+            return comparison |> PaketComparer.diffToDTO
+        }
+    }
 
 let webApp =
     Remoting.createApi()

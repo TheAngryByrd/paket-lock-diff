@@ -136,47 +136,7 @@ let compareResults (model : PaketDiff) (dispatch : Msg -> unit) =
             yield! printVersionDiff model.VersionDowngrades
         ]
     ]
-    // Column.column [Column.Width (Screen.All, Column.Is12)] [
-    //     Container.container [] [
-    //         Tile.ancestor [ ]
-    //             [
-    //                 Tile.parent [ Tile.IsVertical
-    //                               Tile.Size Tile.Is6 ]
-    //                     [ Tile.child [ ] [
-    //                         Box.box' [ ] [
-    //                             Heading.p [ ]
-    //                                 [ str <| sprintf "Additions - %d" model.Additions.Length ]
-    //                             yield! printPackage model.Additions
-    //                         ]
 
-    //                         ]
-    //                       Tile.child [ ]
-    //                         [ Box.box' [ ]
-    //                             [ Heading.p [ ]
-    //                                 [ str <| sprintf "Removals - %d" model.Removals.Length ]
-
-    //                               yield! printPackage model.Removals
-    //                             ]
-    //                         ]
-    //                     ]
-    //                 Tile.parent [   Tile.IsVertical
-    //                                 Tile.Size Tile.Is6 ]
-    //                     [ Tile.child [ ]
-    //                         [ Box.box' [ ]
-    //                             [ Heading.p [ ]
-    //                                 [ str <| sprintf "Version Upgrades - %d" model.VersionUpgrades.Length]
-    //                               yield! printVersionDiff model.VersionUpgrades
-    //                             ] ]
-    //                       Tile.child [ ]
-    //                         [ Box.box' [ ]
-    //                             [ Heading.p [ ]
-    //                                 [ str <| sprintf "Version Downgrades - %d" model.VersionDowngrades.Length ]
-    //                               yield! printVersionDiff model.VersionDowngrades
-    //                             ] ]
-    //                     ]
-    //             ]
-    //     ]
-    // ]
 
 let diffBoxes (model : Model) (dispatch : Msg -> unit) =
     Columns.columns [] [

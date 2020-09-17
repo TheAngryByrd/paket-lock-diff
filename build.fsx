@@ -48,9 +48,10 @@ Target.create "Bundle" (fun _ ->
 )
 
 Target.create "Azure" (fun _ ->
+    printfn "deployDir : %s" deployDir
     let web = webApp {
-        name "paket_lock_diff"
-        zip_deploy "deploy"
+        name "paket-lock-diff"
+        zip_deploy deployDir
     }
     let deployment = arm {
         location Location.WestEurope
@@ -58,7 +59,7 @@ Target.create "Azure" (fun _ ->
     }
 
     deployment
-    |> Deploy.execute "paket_diff" Deploy.NoParameters
+    |> Deploy.execute "paket_lock_diff_rg" Deploy.NoParameters
     |> ignore
 )
 

@@ -6,11 +6,17 @@ open Fable.Remoting.Client
 open Shared
 
 type PaketLockFile = string
+
+type CompareResults =
+| Finished of Shared.PaketDiff
+| Loading
+| NotStarted
+
 type Model =
     {
         OlderLockFile: PaketLockFile
         NewerLockFile: PaketLockFile
-        CompareResults : Shared.PaketDiff option
+        CompareResults : CompareResults
     }
 
 
@@ -30,7 +36,7 @@ let init(): Model * Cmd<Msg> =
         {
             OlderLockFile = ""
             NewerLockFile = ""
-            CompareResults = None
+            CompareResults = NotStarted
         }
     model, Cmd.none
 
@@ -59,9 +65,9 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     | RequestComparison ->
         let compareRequest = PaketLocks.create model.OlderLockFile model.NewerLockFile
         let cmd = Cmd.OfAsync.perform todosApi.comparePaketLocks compareRequest ComparisonFinished
-        model, cmd
+        { model with CompareResults = Loading }, cmd
     | ComparisonFinished result ->
-        { model with CompareResults = Some result}, Cmd.none
+        { model with CompareResults = Finished result}, Cmd.none
 
 open Fable.React
 open Fable.React.Props
@@ -185,8 +191,6 @@ let view (model : Model) (dispatch : Msg -> unit) =
         Section.section [ ] [
                 Container.container [ ] [
                     Column.column [
-                        // Column.Width (Screen.All, Column.Is6)
-                        // Column.Offset (Screen.All, Column.Is3)
                     ] [
                         Heading.p [ Heading.Modifiers [ Modifier.TextAlignment (Screen.All, TextAlignment.Centered) ] ] [ str "Paket Diff Tool" ]
                         diffBoxes model dispatch
@@ -196,8 +200,15 @@ let view (model : Model) (dispatch : Msg -> unit) =
             ]
         Section.section [ ] [
             match model.CompareResults with
-            | Some m ->
+            | Finished m ->
                 compareResults m dispatch
-            | None -> ()
+            | Loading ->
+                Container.container [ ] [
+                    Progress.progress [Progress.Color Color.IsPrimary; Progress.Size Size.IsSmall] [
+
+                    ]
+                ]
+            | NotStarted ->
+                ()
         ]
     ]

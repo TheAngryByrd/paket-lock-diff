@@ -50,7 +50,14 @@ module PaketComparer =
             |> Set.toList
             |> List.choose(findPackageByGroupAndName newerPaketLock.InstalledPackages)
             |> List.map Package.OfTuple
-        let removals = []
+        let removals =
+            // Need sets without version numbers
+            let os1 = olderSet |> Set.map(fun (g,p,v) -> g,p)
+            let ns1 = newerSet |> Set.map(fun (g,p,v) -> g,p)
+            Set.difference os1 ns1
+            |> Set.toList
+            |> List.choose(findPackageByGroupAndName olderPaketLock.InstalledPackages)
+            |> List.map Package.OfTuple
         let versionIncreaes = []
         let versionDecreases = []
         {

@@ -35,6 +35,23 @@ let paketCompareTests = testList "Paket Compare" [
                 createPackage "main" "System.Security.Cryptography.ProtectedData" "4.7"
             ]
         Expect.sequenceEqual result.Additions expectedAdditions ""
+        Expect.sequenceEqual result.Removals [] ""
+        Expect.sequenceEqual result.VersionIncreases [] ""
+        Expect.sequenceEqual result.VersionDecreases [] ""
+    }
+    testCaseAsync "Removals" <| async {
+        let older = "./paket-lock-files/removal-tests/old-paket.lock"
+        let newer = "./paket-lock-files/removal-tests/new-paket.lock"
+        let result = PaketComparer.compare(older, newer)
+
+        let expectedRemovals =
+            [
+                createPackage "main" "FsToolkit.ErrorHandling" "1.4.3"
+            ]
+        Expect.sequenceEqual result.Additions [] ""
+        Expect.sequenceEqual result.Removals expectedRemovals ""
+        Expect.sequenceEqual result.VersionIncreases [] ""
+        Expect.sequenceEqual result.VersionDecreases [] ""
     }
 ]
 

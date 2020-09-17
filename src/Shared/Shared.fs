@@ -19,11 +19,19 @@ type Package = {
     PackageName : string
     Version : string
 }
+
+type SemVerChange =
+| Major
+| Minor
+| Patch
+| Other
+
 type PackageVersionDiff = {
     GroupName : string
     PackageName : string
     OlderVersion : string
     NewerVersion : string
+    SemVerChange : SemVerChange
 }
 
 type PaketDiff = {

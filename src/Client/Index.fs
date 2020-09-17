@@ -86,7 +86,7 @@ let compareResults (model : PaketDiff) (dispatch : Msg -> unit) =
         |> List.groupBy(fun g -> g.GroupName)
         |> List.collect(fun (groupName, packages) ->
             [
-                p [ ] [ str groupName ]
+                p [ ] [ str <| sprintf "%s - %d" groupName packages.Length  ]
                 for x in packages do
                     p [ ][
                       str <| sprintf "\u00A0\u00A0%s - %s" x.PackageName x.Version
@@ -98,10 +98,15 @@ let compareResults (model : PaketDiff) (dispatch : Msg -> unit) =
         |> List.groupBy(fun g -> g.GroupName)
         |> List.collect(fun (groupName, packages) ->
             [
-                p [ ] [ str groupName ]
+                let majorLength = packages |> List.filter(fun p -> match p.SemVerChange with | Major -> true | _ -> false) |> List.length
+                let minorLength = packages |> List.filter(fun p -> match p.SemVerChange with | Minor -> true | _ -> false) |> List.length
+                let patchLength = packages |> List.filter(fun p -> match p.SemVerChange with | Patch -> true | _ -> false) |> List.length
+                p [ ] [ str <| sprintf "%s - %d -- major(%d) minor(%d) patch(%d)" groupName packages.Length majorLength minorLength patchLength ]
                 for x in packages do
+
                     p [ ][
-                      str <| sprintf "\u00A0\u00A0%s - %s -> %s" x.PackageName x.OlderVersion x.NewerVersion
+
+                      str <| sprintf "\u00A0\u00A0%s - %s -> %s - (%A)" x.PackageName x.OlderVersion x.NewerVersion x.SemVerChange
                     ]
             ]
         )

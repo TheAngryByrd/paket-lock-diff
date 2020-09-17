@@ -26,11 +26,18 @@ module PaketComparer =
                     PackageName = packageName
                     Version = version
                 }
+    type SemVerChange =
+    | Major
+    | Minor
+    | Patch
+    | Other
+
     type PackageVersionDiff = {
         GroupName : GroupName
         PackageName : PackageName
         OlderVersion : SemVerInfo
         NewerVersion : SemVerInfo
+        SemVerChange : SemVerChange
     }
 
     type Diff = {
@@ -53,6 +60,12 @@ module PaketComparer =
                 PackageName = p.PackageName.Name
                 OlderVersion = p.OlderVersion.Normalize()
                 NewerVersion = p.NewerVersion.Normalize()
+                SemVerChange =
+                    match p.SemVerChange with
+                    | Major -> Shared.SemVerChange.Major
+                    | Minor -> Shared.SemVerChange.Minor
+                    | Patch -> Shared.SemVerChange.Patch
+                    | Other -> Shared.SemVerChange.Other
             }
         {
             PaketDiff.Additions = d.Additions |> List.map toPackageDTO
@@ -90,6 +103,16 @@ module PaketComparer =
             |> List.choose(findPackageByGroupAndName olderPaketLock.InstalledPackages)
             |> List.map Package.OfTuple
 
+        let calculateSemVerChange (olderVersion : SemVerInfo) (newerVersion : SemVerInfo) =
+            if olderVersion.Major <> newerVersion.Major then
+                SemVerChange.Major
+            elif olderVersion.Minor <> newerVersion.Minor then
+                SemVerChange.Minor
+            elif olderVersion.Patch <> newerVersion.Patch then
+                SemVerChange.Patch
+            else
+                SemVerChange.Other
+
         let packagesChanged =
             Set.intersect olderSet newerSet
             |> Set.toList
@@ -103,6 +126,7 @@ module PaketComparer =
                         PackageName = p
                         OlderVersion = olderVersion
                         NewerVersion = newerVersion
+                        SemVerChange = calculateSemVerChange olderVersion newerVersion
                     }
                 | _ -> None
             )

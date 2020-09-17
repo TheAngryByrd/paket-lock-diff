@@ -8,8 +8,6 @@ open Shared
 type PaketLockFile = string
 type Model =
     {
-        Todos: Todo list
-        Input: string
         OlderLockFile: PaketLockFile
         NewerLockFile: PaketLockFile
         CompareResults : Shared.PaketDiff option
@@ -17,10 +15,6 @@ type Model =
 
 
 type Msg =
-    | GotTodos of Todo list
-    | SetInput of string
-    | AddTodo
-    | AddedTodo of Todo
     | OlderLockChanged of PaketLockFile
     | NewerLockChanged of PaketLockFile
     | RequestComparison
@@ -33,13 +27,12 @@ let todosApi =
 
 let init(): Model * Cmd<Msg> =
     let model =
-        { Todos = []
-          Input = ""
-          OlderLockFile = ""
-          NewerLockFile = ""
-          CompareResults = None }
-    let cmd = Cmd.OfAsync.perform todosApi.getTodos () GotTodos
-    model, cmd
+        {
+            OlderLockFile = ""
+            NewerLockFile = ""
+            CompareResults = None
+        }
+    model, Cmd.none
 
 let isNullOrWhitespace (s : string) =
     match s with
@@ -57,16 +50,6 @@ let requestDiff (model : Model) =
 
 let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     match msg with
-    | GotTodos todos ->
-        { model with Todos = todos }, Cmd.none
-    | SetInput value ->
-        { model with Input = value }, Cmd.none
-    | AddTodo ->
-        let todo = Todo.create model.Input
-        let cmd = Cmd.OfAsync.perform todosApi.addTodo todo AddedTodo
-        { model with Input = "" }, cmd
-    | AddedTodo todo ->
-        { model with Todos = model.Todos @ [ todo ] }, Cmd.none
     | OlderLockChanged olderLockFile ->
         let model = { model with OlderLockFile = olderLockFile }
         model, requestDiff model

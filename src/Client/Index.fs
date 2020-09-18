@@ -72,16 +72,44 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 open Fable.React
 open Fable.React.Props
 open Fulma
+open Fable.FontAwesome
 
 let navBrand =
     Navbar.Brand.div [ ] [
+
+        Navbar.Item.a [
+            Navbar.Item.Props [ Href "https://github.com/TheAngryByrd/paket-lock-diff" ]
+            Navbar.Item.IsActive false
+        ] [
+            Fa.span [ Fa.Brand.Github; Fa.PullLeft ][ ]
+            span [] [
+                str " GitHub Repo"
+            ]
+        ]
+        Navbar.Item.a [
+            Navbar.Item.Props [ Href "https://github.com/fsprojects/Paket" ]
+            Navbar.Item.IsActive false
+        ] [
+            img [
+                Src "https://raw.githubusercontent.com/fsprojects/Paket/master/docs/files/img/logo.png"
+                Alt "Logo"
+                Style [MarginRight ".3em"]
+            ]
+            span [] [
+                str "Paket"
+            ]
+        ]
         Navbar.Item.a [
             Navbar.Item.Props [ Href "https://safe-stack.github.io/" ]
-            Navbar.Item.IsActive true
+            Navbar.Item.IsActive false
         ] [
             img [
                 Src "/favicon.png"
                 Alt "Logo"
+                Style [MarginRight ".3em"]
+            ]
+            span [] [
+                str "SAFE Stack"
             ]
         ]
     ]
@@ -170,6 +198,9 @@ let diffBoxes (model : Model) (dispatch : Msg -> unit) =
 
 let view (model : Model) (dispatch : Msg -> unit) =
     div [] [
+        Navbar.navbar [ ] [
+                Container.container [ ] [ navBrand ]
+            ]
         // Hero.hero [
         //     // Hero.Color IsPrimary
         //     Hero.IsFullHeight
@@ -181,9 +212,7 @@ let view (model : Model) (dispatch : Msg -> unit) =
         //     ]
         // ] [
         //     Hero.head [ ] [
-        //         Navbar.navbar [ ] [
-        //             Container.container [ ] [ navBrand ]
-        //         ]
+
         //     ]
 
 

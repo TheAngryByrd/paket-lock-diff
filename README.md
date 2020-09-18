@@ -2,7 +2,7 @@
 
 ## What
 
-This is a tool to analyze two [paket.lock](https://fsprojects.github.io/Paket/lock-file.html) files.  Thre report generated lists:
+This is a tool to analyze two [paket.lock](https://fsprojects.github.io/Paket/lock-file.html) files.  The report generates a few lists:
 
 - Additions made
 - Removals made

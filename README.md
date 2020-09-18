@@ -1,14 +1,39 @@
-# SAFE Template
-This template can be used to generate a full-stack web application using the [SAFE Stack](https://safe-stack.github.io/). It was created using the dotnet [SAFE Template](https://safe-stack.github.io/docs/template-overview/). If you want to learn more about the template why not start with the [quick start](https://safe-stack.github.io/docs/quickstart/) guide?
+# Paket Lock Diff Tool
 
-## Install pre-requisites
+## What
+
+This is a tool to analyze two [paket.lock](https://fsprojects.github.io/Paket/lock-file.html) files.  Thre report generated lists:
+
+- Additions made
+- Removals made
+- Version Upgrades
+  - This will show the version change and if it was a major/minor/patch based on [SemVer](https://semver.org/) of the package.
+- Version Downgrades
+  - This will show the version change and if it was a major/minor/patch based on [SemVer](https://semver.org/) of the package.
+
+## Why
+
+When looking at git diffs between two lock files, it can be hard to get an overall picture of what changed, especially if you have many [transitive dependencies](https://fsprojects.github.io/Paket/faq.html#transitive).
+
+## How
+
+1. [Give it a try here](https://paket-lock-diff.azurewebsites.net/)
+2. Copy and paste [this lock file](https://raw.githubusercontent.com/TheAngryByrd/MiniScaffold/0.22.0/paket.lock) into `Older LockFile` field.
+3. Copy and paste [this lock file](https://raw.githubusercontent.com/TheAngryByrd/MiniScaffold/master/paket.lock) into `Newer LockFile` field.
+4. The app should analyze the lock files and give you some results.
+
+---
+
+## Contributing 
+
+### Install pre-requisites
 You'll need to install the following pre-requisites in order to build SAFE applications
 
 * The [.NET Core SDK](https://www.microsoft.com/net/download) 3.1 or higher.
 * [npm](https://nodejs.org/en/download/) package manager.
 * [Node LTS](https://nodejs.org/en/download/).
 
-## Starting the application
+### Starting the application
 Before you run the project **for the first time only** you must install dotnet "local tools" with this command:
 
 ```bash
@@ -31,7 +56,7 @@ dotnet fake build -t runtests
 
 Client tests are available under `http://localhost:8081` in your browser and server tests are running in watch mode in console.
 
-## SAFE Stack Documentation
+### SAFE Stack Documentation
 If you want to know more about the full Azure Stack and all of it's components (including Azure) visit the official [SAFE documentation](https://safe-stack.github.io/docs/).
 
 You will find more documentation about the used F# components at the following places:

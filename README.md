@@ -7,9 +7,7 @@ This is a tool to analyze two [paket.lock](https://fsprojects.github.io/Paket/lo
 - Additions made
 - Removals made
 - Version Upgrades
-  - This will show the version change and if it was a major/minor/patch based on [SemVer](https://semver.org/) of the package.
 - Version Downgrades
-  - This will show the version change and if it was a major/minor/patch based on [SemVer](https://semver.org/) of the package.
 
 ## Why
 

@@ -120,10 +120,12 @@ let compareResults (model : PaketDiff) (dispatch : Msg -> unit) =
         |> List.groupBy(fun g -> g.GroupName)
         |> List.collect(fun (groupName, packages) ->
             [
-                p [ ] [ str <| sprintf "%s - %d" groupName packages.Length  ]
+                p [  ] [
+                    str <| sprintf "%s - %d" groupName packages.Length
+                ]
                 for x in packages do
-                    p [ ][
-                      str <| sprintf "\u00A0\u00A0%s - %s" x.PackageName x.Version
+                    p [ Style [Margin ".3em"] ][
+                        str <| sprintf "\u00A0\u00A0%s - %s" x.PackageName x.Version
                     ]
             ]
         )
@@ -135,12 +137,67 @@ let compareResults (model : PaketDiff) (dispatch : Msg -> unit) =
                 let majorLength = packages |> List.filter(fun p -> match p.SemVerChange with | Major -> true | _ -> false) |> List.length
                 let minorLength = packages |> List.filter(fun p -> match p.SemVerChange with | Minor -> true | _ -> false) |> List.length
                 let patchLength = packages |> List.filter(fun p -> match p.SemVerChange with | Patch -> true | _ -> false) |> List.length
-                p [ ] [ str <| sprintf "%s - %d -- major(%d) minor(%d) patch(%d)" groupName packages.Length majorLength minorLength patchLength ]
+                p [ ] [
+                    Field.div [ Field.IsGroupedMultiline ] [
+                        span [Style [MarginRight ".5em"] ] [
+                            str <| sprintf "%s - %d" groupName packages.Length
+                        ]
+                        Control.div [] [
+                            Tag.list [ Tag.List.HasAddons ] [
+                                Tag.tag [Tag.Color IsDanger] [
+                                    str "Major"
+                                ]
+                                Tag.tag [Tag.Color IsLight ] [
+                                    str <| sprintf "%d" majorLength
+                                ]
+                            ]
+                        ]
+                        Control.div [] [
+                            Tag.list [ Tag.List.HasAddons ] [
+                                Tag.tag [Tag.Color IsWarning] [
+                                    str "Minor"
+                                ]
+                                Tag.tag [Tag.Color IsLight ] [
+                                    str <| sprintf "%d" minorLength
+                                ]
+                            ]
+                        ]
+                        Control.div [] [
+                            Tag.list [ Tag.List.HasAddons ] [
+                                Tag.tag [Tag.Color IsInfo] [
+                                    str "Patch"
+                                ]
+                                Tag.tag [Tag.Color IsLight ] [
+                                    str <| sprintf "%d" patchLength
+                                ]
+                            ]
+                        ]
+                        ]
+
+                ]
                 for x in packages do
-
-                    p [ ][
-
-                      str <| sprintf "\u00A0\u00A0%s - %s -> %s - (%A)" x.PackageName x.OlderVersion x.NewerVersion x.SemVerChange
+                    p [ Style [Margin ".3em"]][
+                        Field.div [ Field.IsGroupedMultiline ] [
+                            span [Style [MarginRight ".5em"] ] [
+                                str <| sprintf "\u00A0\u00A0%s - %s -> %s" x.PackageName x.OlderVersion x.NewerVersion
+                            ]
+                            Control.div [] [
+                                Tag.list [ Tag.List.HasAddons ] [
+                                    let color =
+                                        match x.SemVerChange with
+                                        | Major -> Tag.Color IsDanger |> Some
+                                        | Minor -> Tag.Color IsWarning |> Some
+                                        | Patch -> Tag.Color IsInfo |> Some
+                                        | _ -> None
+                                    match color with
+                                    | Some c ->
+                                        Tag.tag [c] [
+                                            str <| sprintf "%A" x.SemVerChange
+                                        ]
+                                    | None -> ()
+                                ]
+                            ]
+                        ]
                     ]
             ]
         )
@@ -201,22 +258,7 @@ let view (model : Model) (dispatch : Msg -> unit) =
         Navbar.navbar [ ] [
                 Container.container [ ] [ navBrand ]
             ]
-        // Hero.hero [
-        //     // Hero.Color IsPrimary
-        //     Hero.IsFullHeight
-        //     Hero.Props [
-        //         Style [
-        //             Background """linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url("https://unsplash.it/1200/900?random") no-repeat center center fixed"""
-        //             BackgroundSize "cover"
-        //         ]
-        //     ]
-        // ] [
-        //     Hero.head [ ] [
 
-        //     ]
-
-
-        // ]
         Section.section [ ] [
                 Container.container [ ] [
                     Column.column [

@@ -41,6 +41,17 @@ type PaketDiff = {
     VersionDowngrades : PackageVersionDiff list
 }
 
+type ParseError = {
+    Message : string
+    InnerMessage : string
+    StackTrace : string
+}
+
+
+type ErrorResponse<'a> = {
+    error : 'a
+}
+
 module Route =
     let builder typeName methodName = sprintf "/api/%s/%s" typeName methodName
 

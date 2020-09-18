@@ -11,6 +11,7 @@ type CompareResults =
 | Finished of Shared.PaketDiff
 | Loading
 | NotStarted
+| Errored of exn
 
 type Model =
     {
@@ -24,7 +25,7 @@ type Msg =
     | OlderLockChanged of PaketLockFile
     | NewerLockChanged of PaketLockFile
     | RequestComparison
-    | ComparisonFinished of PaketDiff
+    | ComparisonFinished of Result<PaketDiff,exn>
 
 let todosApi =
     Remoting.createApi()
@@ -64,15 +65,21 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         model, requestDiff model
     | RequestComparison ->
         let compareRequest = PaketLocks.create model.OlderLockFile model.NewerLockFile
-        let cmd = Cmd.OfAsync.perform todosApi.comparePaketLocks compareRequest ComparisonFinished
+        let cmd = Cmd.OfAsync.either todosApi.comparePaketLocks compareRequest (Ok >> ComparisonFinished) (Error >> ComparisonFinished)
+
         { model with CompareResults = Loading }, cmd
     | ComparisonFinished result ->
-        { model with CompareResults = Finished result}, Cmd.none
+        let compareResults =
+            match result with
+            | Ok r -> Finished r
+            | Error e -> Errored e
+        { model with CompareResults = compareResults }, Cmd.none
 
 open Fable.React
 open Fable.React.Props
 open Fulma
 open Fable.FontAwesome
+open Thoth.Json
 
 let navBrand =
     Navbar.Brand.div [ ] [
@@ -172,7 +179,7 @@ let compareResults (model : PaketDiff) (dispatch : Msg -> unit) =
                                 ]
                             ]
                         ]
-                        ]
+                    ]
 
                 ]
                 for x in packages do
@@ -253,6 +260,16 @@ let diffBoxes (model : Model) (dispatch : Msg -> unit) =
         ]
     ]
 
+let errorBox elems =
+    Container.container [] [
+        Notification.notification [ Notification.Color IsDanger] [
+                h1 [Class "title"] [
+                    str "Error"
+                ]
+                yield! elems
+        ]
+    ]
+
 let view (model : Model) (dispatch : Msg -> unit) =
     div [] [
         Navbar.navbar [ ] [
@@ -279,6 +296,34 @@ let view (model : Model) (dispatch : Msg -> unit) =
 
                     ]
                 ]
+            | Errored e ->
+                match e with
+                | :? ProxyRequestException as e ->
+                    let er = Decode.Auto.fromString<ErrorResponse<ParseError>> e.ResponseText
+                    let errorElems =
+                        match er with
+                        | Ok er ->
+                            [
+                                div [Class "block"] [
+                                    str <| sprintf "%A" er.error.Message
+                                ]
+                                div [Class "block"] [
+                                    str <| sprintf "%A" er.error.InnerMessage
+                                ]
+                                div [Class "block"] [
+                                    str <| sprintf "%A" er.error.StackTrace
+                                ]
+                            ]
+                        | Error _ ->
+                            [
+                                div [Class "block"] [
+                                    str <| sprintf "%A" e.Message
+                                ]
+                            ]
+                    errorBox errorElems
+
+
+                | _ -> ()
             | NotStarted ->
                 ()
         ]

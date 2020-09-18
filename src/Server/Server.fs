@@ -4,6 +4,8 @@ open Fable.Remoting.Server
 open Fable.Remoting.Giraffe
 open Saturn
 open Shared
+open System
+open Microsoft.AspNetCore.Http
 
 module String =
     open System
@@ -156,9 +158,24 @@ let todosApi =
         }
     }
 
+let errorHandler (ex : Exception) (routeInfo: RouteInfo<HttpContext>) =
+    printfn "%A" ex
+    match ex with
+    | ex when ex.Message.Contains("Error during parsing") ->
+        let error =
+            {
+                Message = ex.Message
+                InnerMessage = ex.InnerException.Message
+                StackTrace = ex.StackTrace
+            }
+        Propagate error
+    | ex ->
+        Propagate ex.Message
+
 let webApp =
     Remoting.createApi()
     |> Remoting.withRouteBuilder Route.builder
+    |> Remoting.withErrorHandler errorHandler
     |> Remoting.fromValue todosApi
     |> Remoting.buildHttpHandler
 

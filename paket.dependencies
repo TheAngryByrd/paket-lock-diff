@@ -1,10 +1,11 @@
 source https://api.nuget.org/v3/index.json
-framework: netcoreapp3.1, netstandard2.0
+framework: net5.0, netstandard2.0
 storage: none
 
+nuget FSharp.Core 5.0.0
 nuget Fable.Remoting.Giraffe
 nuget Saturn
-nuget Paket.Core
+nuget Paket.Core 6.0.0-beta8
 nuget Expecto
 
 nuget Fable.Core
@@ -24,8 +25,8 @@ group Build
     storage: none
 
     nuget FSharp.Core
-    nuget Fake.Core.ReleaseNotes
-    nuget Fake.Core.Target
-    nuget Fake.DotNet.Cli
-    nuget Fake.IO.FileSystem
+    nuget Fake.Core.ReleaseNotes 5.20.4-alpha.1642
+    nuget Fake.Core.Target 5.20.4-alpha.1642
+    nuget Fake.DotNet.Cli 5.20.4-alpha.1642
+    nuget Fake.IO.FileSystem 5.20.4-alpha.1642
     nuget Farmer

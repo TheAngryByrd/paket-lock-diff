@@ -1,11 +1,6 @@
 module Server
 
-open Fable.Remoting.Server
-open Fable.Remoting.Giraffe
-open Saturn
-open Shared
-open System
-open Microsoft.AspNetCore.Http
+
 
 module String =
     open System
@@ -16,6 +11,10 @@ module String =
 module PaketComparer =
     open Paket
     open Paket.Domain
+
+    open Shared
+
+
     type Package = {
         GroupName : GroupName
         PackageName : PackageName
@@ -148,15 +147,30 @@ module PaketComparer =
             VersionDowngrades = versionDowngrades
         }
 
-let todosApi =
+
+
+open Microsoft.AspNetCore.Http
+open Microsoft.Extensions.DependencyInjection
+
+open Fable.Remoting.Server
+open Fable.Remoting.Giraffe
+open Saturn
+open Shared
+open System
+
+let api (httpContext : HttpContext) =
     {
         comparePaketLocks = fun paketFiles -> async {
-            let olderSplit = paketFiles.OlderLockFile |> String.splitByNewlines
-            let newerSplit = paketFiles.NewerLockFile |> String.splitByNewlines
+            let! olderLockFile, newerLockFile =
+                async.Return(paketFiles.OlderLockFile, paketFiles.NewerLockFile)
+
+            let olderSplit = olderLockFile |> String.splitByNewlines
+            let newerSplit = newerLockFile |> String.splitByNewlines
             let comparison = PaketComparer.compare(olderSplit, newerSplit)
             return comparison |> PaketComparer.diffToDTO
         }
     }
+
 
 let errorHandler (ex : Exception) (routeInfo: RouteInfo<HttpContext>) =
     printfn "%A" ex
@@ -176,8 +190,12 @@ let webApp =
     Remoting.createApi()
     |> Remoting.withRouteBuilder Route.builder
     |> Remoting.withErrorHandler errorHandler
-    |> Remoting.fromValue todosApi
+    |> Remoting.fromContext api
     |> Remoting.buildHttpHandler
+
+let configureServices (services : IServiceCollection) =
+    services
+
 
 let app =
     application {
@@ -186,6 +204,7 @@ let app =
         memory_cache
         use_static "public"
         use_gzip
+        service_config  configureServices
     }
 
 run app

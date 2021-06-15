@@ -2,6 +2,7 @@ source https://api.nuget.org/v3/index.json
 framework: netcoreapp3.1, netstandard2.0
 storage: none
 
+nuget Fable.Browser.Url
 nuget Fable.Fetch
 nuget FSharp.Core 5.0.0
 nuget Fable.Remoting.Giraffe

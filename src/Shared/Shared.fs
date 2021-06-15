@@ -3,6 +3,10 @@ namespace Shared
 open System
 
 
+module String =
+    let notNullOrEmpty (s : string) =
+        String.IsNullOrWhiteSpace s |> not
+
 type PaketLocks = {
     OlderLockFile : string
     NewerLockFile : string

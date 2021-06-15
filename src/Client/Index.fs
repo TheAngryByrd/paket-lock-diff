@@ -7,7 +7,7 @@ open Fable.Remoting.Client
 open Shared
 open Fetch
 open System
-
+open Browser
 type PaketLockFile = string
 
 type CompareResults =
@@ -62,17 +62,37 @@ let paketLockDiffApi =
     |> Remoting.withRouteBuilder Route.builder
     |> Remoting.buildProxy<IPaketLockDiffApi>
 
+let [<Literal>] OlderLockFileUrlQueryParam = "olderLockFileUrl"
+let [<Literal>] NewerLockFileUrlQueryParam = "newerLockFileUrl"
+
 let init(): Model * Cmd<Msg> =
+    let queryStringBuilder = URLSearchParams.Create(Dom.window.location.search)
+    let olderLockFileUrlCmd =
+        queryStringBuilder.get OlderLockFileUrlQueryParam
+        |> Option.map OlderLockUrlChanged
+    let newerLockFileUrlCmd =
+        queryStringBuilder.get NewerLockFileUrlQueryParam
+        |> Option.map NewerLockUrlChanged
+    let msgs =
+        [
+            olderLockFileUrlCmd
+            newerLockFileUrlCmd
+        ]
+        |> List.choose id
+    let cmd =
+        msgs
+        |> List.map Cmd.ofMsg
+        |> Cmd.batch
     let model =
         {
-            InputTypeChoice = InputType.RawText
+            InputTypeChoice = InputType.Url
             OlderLockFile = ""
             OlderLockUrl = ""
             NewerLockFile = ""
             NewerLockUrl = ""
             CompareResults = NotStarted
         }
-    model, Cmd.none
+    model, cmd
 
 let isNullOrWhitespace (s : string) =
     match s with
@@ -112,7 +132,16 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         { model with InputTypeChoice = ty }, Cmd.none
     | OlderLockUrlChanged(url) ->
         let model = {model with OlderLockUrl = url}
-        let cmd = Cmd.OfAsync.either Fetcher.getFromUrl url (OlderLockUrlFetched) (Error >> OlderLockUrlFetched)
+
+        let queryStringBuilder = URLSearchParams.Create(Dom.window.location.search)
+        queryStringBuilder.append(OlderLockFileUrlQueryParam, url)
+        let queryString = sprintf "?%s" (string queryStringBuilder)
+        Dom.window.history.replaceState(null,null, queryString)
+        let cmd =
+            if String.notNullOrEmpty url then
+                Cmd.OfAsync.either Fetcher.getFromUrl url (OlderLockUrlFetched) (Error >> OlderLockUrlFetched)
+            else
+                Cmd.none
         model, cmd
     | OlderLockUrlFetched(paketLockFile) ->
         match paketLockFile with
@@ -123,7 +152,15 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             model, Cmd.none
     | NewerLockUrlChanged(url) ->
         let model = {model with NewerLockUrl = url}
-        let cmd = Cmd.OfAsync.either Fetcher.getFromUrl url (NewerLockUrlFetched) (Error >> NewerLockUrlFetched)
+        let queryStringBuilder = URLSearchParams.Create(Dom.window.location.search)
+        queryStringBuilder.append(NewerLockFileUrlQueryParam, url)
+        let queryString = sprintf "?%s" (string queryStringBuilder)
+        Dom.window.history.replaceState(null,null, queryString)
+        let cmd =
+            if String.notNullOrEmpty url then
+                Cmd.OfAsync.either Fetcher.getFromUrl url (NewerLockUrlFetched) (Error >> NewerLockUrlFetched)
+            else
+                Cmd.none
         model, cmd
     | NewerLockUrlFetched(paketLockFile) ->
         match paketLockFile with
@@ -362,17 +399,17 @@ let view (model : Model) (dispatch : Msg -> unit) =
                 Column.column [] [
                     Heading.p [ Heading.Modifiers [ Modifier.TextAlignment (Screen.All, TextAlignment.Centered) ] ] [ str "Paket Diff Tool" ]
                     Tabs.tabs [ Tabs.IsFullWidth; Tabs.IsBoxed] [
+                        Tabs.tab [Tabs.Tab.IsActive model.InputTypeChoice.IsUrl2] [
+                            a [OnClick (fun ev -> InputTypeChoiceChanged InputType.Url |> dispatch)] [
+                                Fa.i [Fa.IconOption.Icon "fas fa-link"] []
+                                span [Style [Margin "0 0 0 .5em"]] [str "Url"]
+                            ]
+                        ]
                         Tabs.tab [Tabs.Tab.IsActive model.InputTypeChoice.IsRawText2] [
 
                             a [OnClick (fun ev -> InputTypeChoiceChanged InputType.RawText |> dispatch)] [
                                 Fa.i [Fa.IconOption.Icon "fas fa-file-alt"] []
                                 span [Style [Margin "0 0 0 .5em"]] [str "Raw Text"]
-                            ]
-                        ]
-                        Tabs.tab [Tabs.Tab.IsActive model.InputTypeChoice.IsUrl2] [
-                            a [OnClick (fun ev -> InputTypeChoiceChanged InputType.Url |> dispatch)] [
-                                Fa.i [Fa.IconOption.Icon "fas fa-link"] []
-                                span [Style [Margin "0 0 0 .5em"]] [str "Url"]
                             ]
                         ]
                     ]

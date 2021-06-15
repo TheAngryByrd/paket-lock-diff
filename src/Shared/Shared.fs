@@ -2,13 +2,18 @@ namespace Shared
 
 open System
 
+
+module String =
+    let notNullOrEmpty (s : string) =
+        String.IsNullOrWhiteSpace s |> not
+
 type PaketLocks = {
     OlderLockFile : string
     NewerLockFile : string
 }
 
 module PaketLocks =
-    let create (olderLockFile : string) (newerLockFile : string) =
+    let create  (olderLockFile : string) (newerLockFile : string) =
         {
             OlderLockFile = olderLockFile
             NewerLockFile = newerLockFile
@@ -55,7 +60,7 @@ type ErrorResponse<'a> = {
 module Route =
     let builder typeName methodName = sprintf "/api/%s/%s" typeName methodName
 
-type ITodosApi =
+type IPaketLockDiffApi =
     {
         comparePaketLocks: PaketLocks -> Async<PaketDiff>
     }

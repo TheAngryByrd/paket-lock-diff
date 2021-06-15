@@ -148,8 +148,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | Ok file ->
             model, OlderLockChanged file |> Cmd.ofMsg
         | Error e ->
-            printfn "%A" e
-            model, Cmd.none
+            { model with CompareResults = Errored e }, Cmd.none
     | NewerLockUrlChanged(url) ->
         let model = {model with NewerLockUrl = url}
         let queryStringBuilder = URLSearchParams.Create(Dom.window.location.search)
@@ -167,8 +166,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | Ok file ->
             model, NewerLockChanged file |> Cmd.ofMsg
         | Error e ->
-            printfn "%A" e
-            model, Cmd.none
+            { model with CompareResults = Errored e }, Cmd.none
 
 open Fable.React
 open Fable.React.Props
@@ -454,7 +452,15 @@ let view (model : Model) (dispatch : Msg -> unit) =
                                 ]
                             ]
                     errorBox errorElems
-                | _ -> ()
+                | e ->
+                    errorBox [
+                        div [Class "block"] [
+                            str <| sprintf "%A" e.Message
+                        ]
+                        div [Class "block"] [
+                            str <| sprintf "%A" e.StackTrace
+                        ]
+                    ]
             | NotStarted ->
                 ()
         ]

@@ -24,6 +24,34 @@ type InputType =
         member x.IsRawText2 = match x with | RawText _ -> true | _ -> false
         member x.IsUrl2 = match x with | Url _ -> true | _ -> false
 
+
+module Json =
+    [<Emit("JSON.stringify($1, null, $0)")>]
+    let pretty (space : int, value : obj) : string = jsNative
+
+
+module Markdown =
+    let heading1 (v : string) =
+        Fable.React.Helpers.str <| sprintf "# %s\n\n" v
+    let heading2 (v : string) =
+        Fable.React.Helpers.str <| sprintf "## %s\n\n" v
+
+    let lii (indentSize : int) (v : string) =
+        let indent = List.init indentSize (fun _ -> "\u00A0") |> String.concat ""
+        Fable.React.Helpers.str <| sprintf "%s* %s\n" indent v
+    let li (v : string) =
+        lii 0 v
+
+
+type OutputType =
+| Rich
+| Markdown
+| Json
+    with
+        member x.IsRich2 = match x with | Rich _ -> true | _ -> false
+        member x.IsMarkdown2 = match x with | Markdown _ -> true | _ -> false
+        member x.IsJson2 = match x with | Json _ -> true | _ -> false
+
 module Fetcher =
     let getFromUrl (url) = async {
         let! result = fetch url [] |> Async.AwaitPromise
@@ -38,6 +66,7 @@ module Fetcher =
 type Model =
     {
         InputTypeChoice : InputType
+        OutputTypeChoice : OutputType
         OlderLockFile: PaketLockFile
         OlderLockUrl: string
         NewerLockFile: PaketLockFile
@@ -56,6 +85,7 @@ type Msg =
     | RequestComparison
     | ComparisonFinished of Result<PaketDiff,exn>
     | InputTypeChoiceChanged of InputType
+    | OutputTypeChoiceChanged of OutputType
 
 let paketLockDiffApi =
     Remoting.createApi()
@@ -86,6 +116,7 @@ let init(): Model * Cmd<Msg> =
     let model =
         {
             InputTypeChoice = InputType.Url
+            OutputTypeChoice = OutputType.Rich
             OlderLockFile = ""
             OlderLockUrl = ""
             NewerLockFile = ""
@@ -130,6 +161,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         { model with CompareResults = compareResults }, Cmd.none
     | InputTypeChoiceChanged(ty) ->
         { model with InputTypeChoice = ty }, Cmd.none
+    | OutputTypeChoiceChanged(ty) ->
+        { model with OutputTypeChoice = ty }, Cmd.none
     | OlderLockUrlChanged(url) ->
         let model = {model with OlderLockUrl = url}
 
@@ -214,8 +247,23 @@ let navBrand =
         ]
     ]
 
-let compareResults (model : PaketDiff) (dispatch : Msg -> unit) =
-    let printPackage (xs : Shared.Package list) =
+let copyToClipboard element =
+    let codeElement = document.querySelector element
+    let range = document.createRange()
+    range.selectNode codeElement
+    window.getSelection().addRange(range)
+
+    // try
+    document.execCommand("copy") |> ignore
+    window.getSelection().removeAllRanges()
+    // with
+    // _ -> ()
+
+let createToClipboardElement elementToCopy =
+    Button.button [Button.Option.Props [Style [Margin ".3em"]]; Button.Option.OnClick(fun _ -> copyToClipboard elementToCopy)] [str "Copy to Clipboard"]
+
+let compareResults (paketDiff : PaketDiff) (model : Model) (dispatch : Msg -> unit) =
+    let printPackageRich (xs : Shared.Package list) =
         xs
         |> List.groupBy(fun g -> g.GroupName)
         |> List.collect(fun (groupName, packages) ->
@@ -229,6 +277,19 @@ let compareResults (model : PaketDiff) (dispatch : Msg -> unit) =
                     ]
             ]
         )
+    let markdownPrintPackage (xs : Shared.Package list) =
+        xs
+        |> List.groupBy(fun g -> g.GroupName)
+        |> List.collect(fun (groupName, packages) ->
+            [
+                Markdown.li <| sprintf "%s - (%d)" groupName packages.Length
+                for x in packages do
+                    Markdown.lii 2 <| sprintf "%s - %s" x.PackageName x.Version
+                str <| "\n"
+            ]
+        )
+
+
     let printVersionDiff (xs : Shared.PackageVersionDiff list) =
         xs
         |> List.groupBy(fun g -> g.GroupName)
@@ -301,31 +362,98 @@ let compareResults (model : PaketDiff) (dispatch : Msg -> unit) =
                     ]
             ]
         )
+
+
+    let printVersionDiffMarkdown (xs : Shared.PackageVersionDiff list) =
+        xs
+        |> List.groupBy(fun g -> g.GroupName)
+        |> List.collect(fun (groupName, packages) ->
+            [
+                let majorLength = packages |> List.filter(fun p -> match p.SemVerChange with | Major -> true | _ -> false) |> List.length
+                let minorLength = packages |> List.filter(fun p -> match p.SemVerChange with | Minor -> true | _ -> false) |> List.length
+                let patchLength = packages |> List.filter(fun p -> match p.SemVerChange with | Patch -> true | _ -> false) |> List.length
+                Markdown.li <| sprintf "%s - (%d) (Major - %d) (Minor - %d) (Patch - %d)" groupName packages.Length majorLength minorLength patchLength
+                for x in packages do
+                    Markdown.lii 2 <| sprintf "%s - %s -> %s (%A)" x.PackageName x.OlderVersion x.NewerVersion x.SemVerChange
+                str "\n"
+            ]
+        )
+
+
     Container.container [] [
-        Box.box' [] [
-            Heading.p [ ] [
-                str <| sprintf "Additions - %d" model.Additions.Length
+        Tabs.tabs [ Tabs.IsFullWidth; Tabs.IsBoxed] [
+            Tabs.tab [Tabs.Tab.IsActive model.OutputTypeChoice.IsRich2] [
+                a [OnClick (fun ev -> OutputTypeChoiceChanged OutputType.Rich |> dispatch)] [
+                    Fa.i [Fa.IconOption.Icon "fab fa-html5"] []
+                    span [Style [Margin "0 0 0 .5em"]] [str "Rich"]
+                ]
             ]
-            yield! printPackage model.Additions
-        ]
-        Box.box' [] [
-            Heading.p [ ] [
-                str <| sprintf "Removals - %d" model.Removals.Length
+            Tabs.tab [Tabs.Tab.IsActive model.OutputTypeChoice.IsMarkdown2] [
+
+                a [OnClick (fun ev -> OutputTypeChoiceChanged OutputType.Markdown |> dispatch)] [
+                    Fa.i [Fa.IconOption.Icon "fab fa-markdown"] []
+                    span [Style [Margin "0 0 0 .5em"]] [str "Markdown"]
+                ]
             ]
-            yield! printPackage model.Removals
-        ]
-        Box.box' [] [
-            Heading.p [ ] [
-                str <| sprintf "Version Upgrades - %d" model.VersionUpgrades.Length
+            Tabs.tab [Tabs.Tab.IsActive model.OutputTypeChoice.IsJson2] [
+
+                a [OnClick (fun ev -> OutputTypeChoiceChanged  OutputType.Json |> dispatch)] [
+                    span [] [str "{ }"]
+                    span [Style [Margin "0 0 0 .5em"]] [str "Json"]
+                ]
             ]
-            yield! printVersionDiff model.VersionUpgrades
         ]
-        Box.box' [] [
-            Heading.p [ ] [
-                str <| sprintf "Version Downgrades - %d" model.VersionDowngrades.Length
+        match model.OutputTypeChoice with
+        | Rich ->
+            Box.box' [] [
+                Heading.p [ ] [
+                    str <| sprintf "Additions - %d" paketDiff.Additions.Length
+                ]
+                yield! printPackageRich paketDiff.Additions
             ]
-            yield! printVersionDiff model.VersionDowngrades
-        ]
+            Box.box' [] [
+                Heading.p [ ] [
+                    str <| sprintf "Removals - %d" paketDiff.Removals.Length
+                ]
+                yield! printPackageRich paketDiff.Removals
+            ]
+            Box.box' [] [
+                Heading.p [ ] [
+                    str <| sprintf "Version Upgrades - %d" paketDiff.VersionUpgrades.Length
+                ]
+                yield! printVersionDiff paketDiff.VersionUpgrades
+            ]
+            Box.box' [] [
+                Heading.p [ ] [
+                    str <| sprintf "Version Downgrades - %d" paketDiff.VersionDowngrades.Length
+                ]
+                yield! printVersionDiff paketDiff.VersionDowngrades
+            ]
+        | Markdown ->
+            createToClipboardElement "#markdown-output"
+            pre [Id "markdown-output"] [
+                code [] [
+
+                    Markdown.heading1 "Paket Lock Diff Report"
+
+                    str <| sprintf "This report was generated via [Paket Lock Diff](%s)\n\n" (Dom.window.location.ToString())
+                    Markdown.heading2 <| sprintf "Additions - (%d)" paketDiff.Additions.Length
+                    yield! markdownPrintPackage paketDiff.Additions
+                    Markdown.heading2 <| sprintf "Removals - (%d)" paketDiff.Removals.Length
+                    yield! markdownPrintPackage  paketDiff.Removals
+                    Markdown.heading2 <| sprintf "Version Upgrades - (%d)" paketDiff.VersionUpgrades.Length
+                    yield! printVersionDiffMarkdown paketDiff.VersionUpgrades
+                    Markdown.heading2 <| sprintf "Version Downgrades - (%d)" paketDiff.VersionDowngrades.Length
+                    yield! printVersionDiffMarkdown paketDiff.VersionDowngrades
+                ]
+            ]
+        | Json ->
+            createToClipboardElement "#json-output"
+            pre [Id "json-output"] [
+                code [] [
+                    str <| Json.pretty(4, paketDiff)
+                ]
+            ]
     ]
 
 let rawTextDiffBoxes (model : Model) (dispatch : Msg -> unit) =
@@ -422,7 +550,7 @@ let view (model : Model) (dispatch : Msg -> unit) =
         Section.section [ ] [
             match model.CompareResults with
             | Finished m ->
-                compareResults m dispatch
+                compareResults m model dispatch
             | Loading ->
                 Container.container [ ] [
                     Progress.progress [Progress.Color Color.IsPrimary; Progress.Size Size.IsSmall] []

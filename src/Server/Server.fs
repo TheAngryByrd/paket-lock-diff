@@ -108,10 +108,10 @@ module PaketComparer =
     }
 
     type Diff = {
-        Additions : Package list
-        Removals : Package list
-        VersionUpgrades : PackageVersionDiff list
-        VersionDowngrades : PackageVersionDiff list
+        Additions : Package array
+        Removals : Package array
+        VersionUpgrades : PackageVersionDiff array
+        VersionDowngrades : PackageVersionDiff array
     }
 
     let diffToDTO ( d : Diff) =
@@ -135,10 +135,10 @@ module PaketComparer =
                     | SemVerChange.Other -> Shared.SemVerChange.Other
             }
         {
-            PaketDiff.Additions = d.Additions |> List.map toPackageDTO
-            Removals = d.Removals |> List.map toPackageDTO
-            VersionUpgrades = d.VersionUpgrades |> List.map toPackageVersionDiffDTO
-            VersionDowngrades = d.VersionDowngrades |> List.map toPackageVersionDiffDTO
+            PaketDiff.Additions = d.Additions |> Array.map toPackageDTO |> Array.toList
+            Removals = d.Removals |> Array.map toPackageDTO |> Array.toList
+            VersionUpgrades = d.VersionUpgrades |> Array.map toPackageVersionDiffDTO |> Array.toList
+            VersionDowngrades = d.VersionDowngrades |> Array.map toPackageVersionDiffDTO |> Array.toList
         }
 
     let compare (older, newer) = parAsync {
@@ -172,8 +172,8 @@ module PaketComparer =
 
         let packagesChanged =
             Set.intersect olderSet newerSet
-            |> Set.toList
-            |> List.choose(fun (g,p) ->
+            |> Set.toArray
+            |> Array.Parallel.choose(fun (g,p) ->
                 let older = findPackageByGroupAndName olderPaketLock.InstalledPackages (g,p)
                 let newer = findPackageByGroupAndName newerPaketLock.InstalledPackages (g,p)
                 match older, newer with
@@ -191,28 +191,28 @@ module PaketComparer =
         let! additions = async {
             return
                 Set.difference newerSet olderSet
-                |> Set.toList
-                |> List.choose(findPackageByGroupAndName newerPaketLock.InstalledPackages)
-                |> List.map Package.OfTuple
+                |> Set.toArray
+                |> Array.Parallel.choose(findPackageByGroupAndName newerPaketLock.InstalledPackages)
+                |> Array.map Package.OfTuple
         }
         and! removals = async {
             return
                 Set.difference olderSet newerSet
-                |> Set.toList
-                |> List.choose(findPackageByGroupAndName olderPaketLock.InstalledPackages)
-                |> List.map Package.OfTuple
+                |> Set.toArray
+                |> Array.Parallel.choose(findPackageByGroupAndName olderPaketLock.InstalledPackages)
+                |> Array.map Package.OfTuple
         }
 
         and! versionIncreaes = async {
             return
                 packagesChanged
-                |> List.filter(fun p -> p.OlderVersion < p.NewerVersion)
+                |> Array.filter(fun p -> p.OlderVersion < p.NewerVersion)
         }
 
         and! versionDowngrades = async {
             return
                 packagesChanged
-                |> List.filter(fun p -> p.OlderVersion > p.NewerVersion)
+                |> Array.filter(fun p -> p.OlderVersion > p.NewerVersion)
         }
         return
             {
@@ -237,11 +237,8 @@ open System
 let api (httpContext : HttpContext) =
     {
         comparePaketLocks = fun paketFiles -> async {
-            let! olderLockFile, newerLockFile =
-                async.Return(paketFiles.OlderLockFile, paketFiles.NewerLockFile)
-
-            let olderSplit = olderLockFile |> String.splitByNewlines
-            let newerSplit = newerLockFile |> String.splitByNewlines
+            let olderSplit = paketFiles.OlderLockFile |> String.splitByNewlines
+            let newerSplit = paketFiles.NewerLockFile |> String.splitByNewlines
             let! comparison = PaketComparer.compare(olderSplit, newerSplit)
             return comparison |> PaketComparer.diffToDTO
         }

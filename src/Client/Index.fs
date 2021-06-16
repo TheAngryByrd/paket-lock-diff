@@ -372,9 +372,15 @@ let compareResults (paketDiff : PaketDiff) (model : Model) (dispatch : Msg -> un
                 let majorLength = packages |> List.filter(fun p -> match p.SemVerChange with | Major -> true | _ -> false) |> List.length
                 let minorLength = packages |> List.filter(fun p -> match p.SemVerChange with | Minor -> true | _ -> false) |> List.length
                 let patchLength = packages |> List.filter(fun p -> match p.SemVerChange with | Patch -> true | _ -> false) |> List.length
-                Markdown.li <| sprintf "%s - (%d) (Major - %d) (Minor - %d) (Patch - %d)" groupName packages.Length majorLength minorLength patchLength
+                Markdown.li <| sprintf "%s - (%d) (🔴 Major - %d) (🟡 Minor - %d) (🔵 Patch - %d)" groupName packages.Length majorLength minorLength patchLength
                 for x in packages do
-                    Markdown.lii 2 <| sprintf "%s - %s -> %s (%A)" x.PackageName x.OlderVersion x.NewerVersion x.SemVerChange
+                    let sermVerChange  =
+                        match x.SemVerChange with
+                        | Major -> "🔴 Major"
+                        | Minor -> "🟡 Minor"
+                        | Patch -> "🔵 Patch"
+                        | _ -> ""
+                    Markdown.lii 2 <| sprintf "%s - %s -> %s - (%s)" x.PackageName x.OlderVersion x.NewerVersion sermVerChange
                 str "\n"
             ]
         )

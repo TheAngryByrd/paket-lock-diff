@@ -370,71 +370,46 @@ let compareResults (paketDiff : PaketDiff) (model : Model) (dispatch : Msg -> un
         |> List.groupBy(fun g -> g.GroupName)
         |> List.collect(fun (groupName, packages) ->
             [
-                let majorLength = packages |> List.filter(fun p -> match p.SemVerChange with | Major -> true | _ -> false) |> List.length
-                let minorLength = packages |> List.filter(fun p -> match p.SemVerChange with | Minor -> true | _ -> false) |> List.length
-                let patchLength = packages |> List.filter(fun p -> match p.SemVerChange with | Patch -> true | _ -> false) |> List.length
+
                 p [ ] [
                     Field.div [ Field.IsGroupedMultiline ] [
                         span [Style [MarginRight ".5em"] ] [
                             str <| sprintf "%s - %d" groupName packages.Length
                         ]
-                        Control.div [] [
-                            Tag.list [ Tag.List.HasAddons ] [
-                                Tag.tag [Tag.Color IsDanger] [
-                                    str "Major"
-                                ]
-                                Tag.tag [Tag.Color IsLight ] [
-                                    str <| sprintf "%d" majorLength
-                                ]
-                            ]
-                        ]
-                        Control.div [] [
-                            Tag.list [ Tag.List.HasAddons ] [
-                                Tag.tag [Tag.Color IsWarning] [
-                                    str "Minor"
-                                ]
-                                Tag.tag [Tag.Color IsLight ] [
-                                    str <| sprintf "%d" minorLength
-                                ]
-                            ]
-                        ]
-                        Control.div [] [
-                            Tag.list [ Tag.List.HasAddons ] [
-                                Tag.tag [Tag.Color IsInfo] [
-                                    str "Patch"
-                                ]
-                                Tag.tag [Tag.Color IsLight ] [
-                                    str <| sprintf "%d" patchLength
-                                ]
-                            ]
-                        ]
                     ]
+                    let createTag x length =
+                        Control.div [] [
+                            Tag.list [ Tag.List.HasAddons ] [
+                                let color =
+                                    match x with
+                                    | Major -> Tag.Color IsDanger |> Some
+                                    | Minor -> Tag.Color IsWarning |> Some
+                                    | Patch -> Tag.Color IsInfo |> Some
+                                    | _ -> None
+                                match color with
+                                | Some c ->
+                                    Tag.tag [c] [
+                                        str <| sprintf "%A" x
+                                    ]
+                                    Tag.tag [Tag.Color IsLight ] [
+                                        str <| sprintf "%d" length
+                                    ]
+                                | None -> ()
+                            ]
+                        ]
+                    for (group, ps) in packages |> List.groupBy(fun p -> p.SemVerChange) do
+                        p [ Style [Margin ".3em"]][
+                            Field.div [ Field.IsGroupedMultiline ] [
+                                createTag group ps.Length
 
-                ]
-                for x in packages do
-                    p [ Style [Margin ".3em"]][
-                        Field.div [ Field.IsGroupedMultiline ] [
-                            span [Style [MarginRight ".5em"] ] [
-                                str <| sprintf "\u00A0\u00A0%s - %s -> %s" x.PackageName x.OlderVersion x.NewerVersion
-                            ]
-                            Control.div [] [
-                                Tag.list [ Tag.List.HasAddons ] [
-                                    let color =
-                                        match x.SemVerChange with
-                                        | Major -> Tag.Color IsDanger |> Some
-                                        | Minor -> Tag.Color IsWarning |> Some
-                                        | Patch -> Tag.Color IsInfo |> Some
-                                        | _ -> None
-                                    match color with
-                                    | Some c ->
-                                        Tag.tag [c] [
-                                            str <| sprintf "%A" x.SemVerChange
-                                        ]
-                                    | None -> ()
-                                ]
                             ]
                         ]
-                    ]
+                        for x in ps do
+                            div [Style [MarginRight ".5em"] ] [
+                                str <| sprintf "\u00A0\u00A0\u00A0\u00A0%s - %s -> %s" x.PackageName  x.OlderVersion x.NewerVersion
+                            ]
+                ]
+
             ]
         )
 
@@ -444,18 +419,18 @@ let compareResults (paketDiff : PaketDiff) (model : Model) (dispatch : Msg -> un
         |> List.groupBy(fun g -> g.GroupName)
         |> List.collect(fun (groupName, packages) ->
             [
-                let majorLength = packages |> List.filter(fun p -> match p.SemVerChange with | Major -> true | _ -> false) |> List.length
-                let minorLength = packages |> List.filter(fun p -> match p.SemVerChange with | Minor -> true | _ -> false) |> List.length
-                let patchLength = packages |> List.filter(fun p -> match p.SemVerChange with | Patch -> true | _ -> false) |> List.length
-                Markdown.li <| sprintf "%s - (%d) (🔴 Major - %d) (🟡 Minor - %d) (🔵 Patch - %d)" groupName packages.Length majorLength minorLength patchLength
-                for x in packages do
-                    let sermVerChange  =
-                        match x.SemVerChange with
-                        | Major -> "🔴 Major"
-                        | Minor -> "🟡 Minor"
-                        | Patch -> "🔵 Patch"
+                Markdown.li <| sprintf "%s - (%d)" groupName packages.Length
+
+                let groupTitle x length  =
+                        match x with
+                        | Major -> sprintf "Major - (%d)" length
+                        | Minor -> sprintf "Minor - (%d)" length
+                        | Patch -> sprintf "Patch - (%d)" length
                         | _ -> ""
-                    Markdown.lii 2 <| sprintf "%s - %s -> %s - (%s)" x.PackageName x.OlderVersion x.NewerVersion sermVerChange
+                for (group, ps) in packages |> List.groupBy(fun p -> p.SemVerChange) do
+                    Markdown.lii 2 <| groupTitle group ps.Length
+                    for x in ps do
+                        Markdown.lii 4 <| sprintf "%s - %s -> %s" x.PackageName x.OlderVersion x.NewerVersion
                 str "\n"
             ]
         )

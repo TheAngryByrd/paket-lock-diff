@@ -167,7 +167,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         let model = {model with OlderLockUrl = url}
 
         let queryStringBuilder = URLSearchParams.Create(Dom.window.location.search)
-        queryStringBuilder.append(OlderLockFileUrlQueryParam, url)
+        queryStringBuilder.set(OlderLockFileUrlQueryParam, url)
         let queryString = sprintf "?%s" (string queryStringBuilder)
         Dom.window.history.replaceState(null,null, queryString)
         let cmd =
@@ -185,7 +185,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     | NewerLockUrlChanged(url) ->
         let model = {model with NewerLockUrl = url}
         let queryStringBuilder = URLSearchParams.Create(Dom.window.location.search)
-        queryStringBuilder.append(NewerLockFileUrlQueryParam, url)
+        queryStringBuilder.set(NewerLockFileUrlQueryParam, url)
         let queryString = sprintf "?%s" (string queryStringBuilder)
         Dom.window.history.replaceState(null,null, queryString)
         let cmd =

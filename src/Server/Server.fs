@@ -2,6 +2,71 @@ module Server
 
 
 
+type Async =
+    static member map f x  =
+        async.Bind(x, fun v -> async.Return(f v))
+
+    /// <summary>
+    /// Executes two asyncs concurrently and returns a tuple of the values
+    /// </summary>
+    /// <param name="a1">An async to execute</param>
+    /// <param name="a2">An async to execute</param>
+    /// <returns>Tuple of computed values</returns>
+    static member parZip (a1 : Async<'a>) (a2 : Async<'b>) =
+        // it is not advised to use async {} blocks in the implementation because it can go recursive... see https://thinkbeforecoding.com/post/2020/10/07/applicative-computation-expressions
+        // This is the same as:
+        // async {
+        //     let! c1 = a1 |> Async.StartChild
+        //     let! c2 = a2 |> Async.StartChild
+        //     let! r1 = c1
+        //     let! r2 = c2
+        //     return r1,r2
+        // }
+        async.Bind(Async.StartChild a1, fun c1 ->
+            async.Bind(Async.StartChild a2, fun c2 ->
+                async.Bind(c1, fun r1 ->
+                    async.Bind(c2, fun r2 ->
+                        async.Return(r1,r2)
+                    )
+                )
+            )
+        )
+
+type ParallelAsyncBuilder () =
+        member __.Zero () = async.Zero()
+
+        member __.Delay generator = async.Delay generator
+
+        member inline __.Return value = async.Return value
+
+        member inline __.ReturnFrom (computation:Async<_>) = async.ReturnFrom computation
+
+        member inline __.Bind (computation, binder) = async.Bind(computation, binder)
+
+        member __.Using (resource, binder) = async.Using(resource, binder)
+
+        member __.While (guard, computation) = async.While(guard, computation)
+
+        member __.For (sequence, body) = async.For(sequence, body)
+
+        member inline __.Combine (computation1, computation2) = async.Combine(computation1, computation2)
+
+        member inline __.TryFinally (computation, compensation) = async.TryFinally(computation, compensation)
+
+        member inline __.TryWith (computation, catchHandler) = async.TryWith(computation, catchHandler)
+
+        member inline __.BindReturn(x: Async<'T>, f) = Async.map f x
+
+        member inline __.MergeSources(t1: Async<'T>, t2: Async<'T1>) = Async.parZip t1 t2
+
+[<AutoOpen>]
+module Asyncs =
+    /// <summary>
+    /// Async computation expression which allows for parallel execution of asyncs with the applicative (and!) syntax
+    /// </summary>
+    /// <returns></returns>
+    let parAsync = ParallelAsyncBuilder()
+
 module String =
     open System
     let splitByNewlines (s : string) =
@@ -27,6 +92,7 @@ module PaketComparer =
                     PackageName = packageName
                     Version = version
                 }
+    [<RequireQualifiedAccess>]
     type SemVerChange =
     | Major
     | Minor
@@ -63,10 +129,10 @@ module PaketComparer =
                 NewerVersion = p.NewerVersion.Normalize()
                 SemVerChange =
                     match p.SemVerChange with
-                    | Major -> Shared.SemVerChange.Major
-                    | Minor -> Shared.SemVerChange.Minor
-                    | Patch -> Shared.SemVerChange.Patch
-                    | Other -> Shared.SemVerChange.Other
+                    | SemVerChange.Major -> Shared.SemVerChange.Major
+                    | SemVerChange.Minor -> Shared.SemVerChange.Minor
+                    | SemVerChange.Patch -> Shared.SemVerChange.Patch
+                    | SemVerChange.Other -> Shared.SemVerChange.Other
             }
         {
             PaketDiff.Additions = d.Additions |> List.map toPackageDTO
@@ -75,34 +141,24 @@ module PaketComparer =
             VersionDowngrades = d.VersionDowngrades |> List.map toPackageVersionDiffDTO
         }
 
-    let compare (older, newer) =
-        let olderPaketLock = Paket.LockFile.Parse("old.lock", older)
+    let compare (older, newer) = parAsync {
+        let! olderPaketLock = async { return LockFile.Parse("old.lock", older) }
+        and! newerPaketLock = async {return LockFile.Parse("new.lock", newer) }
+
+        let findPackageByGroupAndName packages (groupName, packageName) =
+            packages
+            |> List.tryFind(fun (g1,p1,_) -> groupName = g1 && packageName = p1)
 
         // Need sets without version numbers
         let olderSet =
             olderPaketLock.InstalledPackages
             |> Set
-            |> Set.map(fun (g,p,v) -> g,p)
-        let newerPaketLock = Paket.LockFile.Parse("new.lock", newer)
+            |> Set.map(fun (g,p,_) -> g,p)
         let newerSet =
             newerPaketLock.InstalledPackages
             |> Set
-            |> Set.map(fun (g,p,v) -> g,p)
-        let findPackageByGroupAndName packages (groupName, packageName) =
-            packages
-            |> List.tryFind(fun (g1,p1,_) -> groupName = g1 && packageName = p1)
+            |> Set.map(fun (g,p,_) -> g,p)
 
-        let additions =
-            Set.difference newerSet olderSet
-            |> Set.toList
-            |> List.choose(findPackageByGroupAndName newerPaketLock.InstalledPackages)
-            |> List.map Package.OfTuple
-        let removals =
-            // Need sets without version numbers
-            Set.difference olderSet newerSet
-            |> Set.toList
-            |> List.choose(findPackageByGroupAndName olderPaketLock.InstalledPackages)
-            |> List.map Package.OfTuple
 
         let calculateSemVerChange (olderVersion : SemVerInfo) (newerVersion : SemVerInfo) =
             if olderVersion.Major <> newerVersion.Major then
@@ -132,20 +188,40 @@ module PaketComparer =
                 | _ -> None
             )
 
-        let versionIncreaes =
-            packagesChanged
-            |> List.filter(fun p -> p.OlderVersion < p.NewerVersion)
-
-        let versionDowngrades =
-            packagesChanged
-            |> List.filter(fun p -> p.OlderVersion > p.NewerVersion)
-
-        {
-            Additions = additions
-            Removals = removals
-            VersionUpgrades = versionIncreaes
-            VersionDowngrades = versionDowngrades
+        let! additions = async {
+            return
+                Set.difference newerSet olderSet
+                |> Set.toList
+                |> List.choose(findPackageByGroupAndName newerPaketLock.InstalledPackages)
+                |> List.map Package.OfTuple
         }
+        and! removals = async {
+            return
+                Set.difference olderSet newerSet
+                |> Set.toList
+                |> List.choose(findPackageByGroupAndName olderPaketLock.InstalledPackages)
+                |> List.map Package.OfTuple
+        }
+
+        and! versionIncreaes = async {
+            return
+                packagesChanged
+                |> List.filter(fun p -> p.OlderVersion < p.NewerVersion)
+        }
+
+        and! versionDowngrades = async {
+            return
+                packagesChanged
+                |> List.filter(fun p -> p.OlderVersion > p.NewerVersion)
+        }
+        return
+            {
+                Additions = additions
+                Removals = removals
+                VersionUpgrades = versionIncreaes
+                VersionDowngrades = versionDowngrades
+            }
+    }
 
 
 
@@ -166,7 +242,7 @@ let api (httpContext : HttpContext) =
 
             let olderSplit = olderLockFile |> String.splitByNewlines
             let newerSplit = newerLockFile |> String.splitByNewlines
-            let comparison = PaketComparer.compare(olderSplit, newerSplit)
+            let! comparison = PaketComparer.compare(olderSplit, newerSplit)
             return comparison |> PaketComparer.diffToDTO
         }
     }

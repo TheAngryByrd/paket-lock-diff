@@ -20,14 +20,16 @@ type CompareResults =
 type InputType =
 | RawText
 | Url
+| GitHubPR
     with
         member x.IsRawText2 = match x with | RawText _ -> true | _ -> false
         member x.IsUrl2 = match x with | Url _ -> true | _ -> false
+        member x.IsGitHubPR2 = match x with | GitHubPR -> true | _ -> false
 
 
 module Json =
     [<Emit("JSON.stringify($1, null, $0)")>]
-    let pretty (space : int, value : obj) : string = jsNative
+    let pretty (_space : int, _value : obj) : string = jsNative
 
 
 module Markdown =
@@ -63,6 +65,56 @@ module Fetcher =
             return Error (Exception (body))
     }
 
+module GitHub =
+    open System.Text.RegularExpressions
+    open Thoth.Fetch
+
+    type Contents = {
+        download_url : string
+    }
+
+    type PRFiles = {
+        filename : string
+        contents_url : string
+    }
+    type PRInfo = {
+        Owner : string
+        Repo : string
+        Number : string
+    }
+
+    let getInfoFromUrl (s : string) =
+        let regex = Regex("github.com\/(?<owner>\S+)\/(?<repo>\S+)\/pull\/(?<number>\d+)")
+        let m = regex.Match s
+        {
+            Owner = m.Groups.[1].Value
+            Repo = m.Groups.[2].Value
+            Number = m.Groups.[3].Value
+        }
+
+
+    let getContentsFromGitHub (info : PRInfo) = async {
+        let repoInfoUrl = sprintf "https://api.github.com/repos/%s/%s/contents/paket.lock" info.Owner info.Repo
+        let! (repoInfo : Contents) = Fetch.get(repoInfoUrl) |> Async.AwaitPromise
+        return repoInfo
+    }
+
+    let getPRFilesFromGitHub (info : PRInfo) =  async {
+        let repoInfoUrl = sprintf "https://api.github.com/repos/%s/%s/pulls/%s/files" info.Owner info.Repo info.Number
+        let! (repoInfo : PRFiles list) = Fetch.get(repoInfoUrl) |> Async.AwaitPromise
+        return repoInfo
+    }
+
+    let fetchOldAndNewer (prURL : string) = async {
+        let info = getInfoFromUrl prURL
+        let! contents = getContentsFromGitHub info
+        let! prFiles = getPRFilesFromGitHub info
+        let newerLockFile = prFiles |> List.find(fun f -> f.filename = "paket.lock")
+        let! (newerContents : Contents) = Fetch.get(newerLockFile.contents_url) |> Async.AwaitPromise
+        return contents.download_url, newerContents.download_url
+    }
+
+
 type Model =
     {
         InputTypeChoice : InputType
@@ -71,6 +123,7 @@ type Model =
         OlderLockUrl: string
         NewerLockFile: PaketLockFile
         NewerLockUrl: string
+        GitHubPRUrl : string
         CompareResults : CompareResults
     }
 
@@ -82,6 +135,8 @@ type Msg =
     | OlderLockUrlFetched of Result<PaketLockFile,exn>
     | NewerLockUrlChanged of string
     | NewerLockUrlFetched of Result<PaketLockFile,exn>
+    | GitHubPRFetched of Result<string*string, exn>
+    | GitHubPRUrlChanged of string
     | RequestComparison
     | ComparisonFinished of Result<PaketDiff,exn>
     | InputTypeChoiceChanged of InputType
@@ -121,6 +176,7 @@ let init(): Model * Cmd<Msg> =
             OlderLockUrl = ""
             NewerLockFile = ""
             NewerLockUrl = ""
+            GitHubPRUrl = ""
             CompareResults = NotStarted
         }
     model, cmd
@@ -198,6 +254,25 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         match paketLockFile with
         | Ok file ->
             model, NewerLockChanged file |> Cmd.ofMsg
+        | Error e ->
+            { model with CompareResults = Errored e }, Cmd.none
+    | GitHubPRUrlChanged(url) ->
+        let model = {model with GitHubPRUrl = url}
+        let cmd =
+            if String.notNullOrEmpty url then
+                Cmd.OfAsync.either GitHub.fetchOldAndNewer url (Ok >> GitHubPRFetched) (Error >> GitHubPRFetched)
+            else
+                Cmd.none
+        model, cmd
+    | GitHubPRFetched(result) ->
+        match result with
+        | Ok(olderUrl, newerUrl) ->
+            let cmd =
+                Cmd.batch [
+                    OlderLockUrlChanged olderUrl |> Cmd.ofMsg
+                    NewerLockUrlChanged newerUrl |> Cmd.ofMsg
+                ]
+            model, cmd
         | Error e ->
             { model with CompareResults = Errored e }, Cmd.none
 
@@ -510,6 +585,20 @@ let urlDiffBoxes (model : Model) (dispatch : Msg -> unit) =
         ]
     ]
 
+let githubPRBoxes (model : Model) (dispatch : Msg -> unit) =
+    Columns.columns [] [
+        Column.column [Column.Width (Screen.All, Column.IsFull)] [
+            Box.box' [] [
+                Field.div [ ]  [
+                    Label.label [ ] [ str "GitHub Pull Request Url" ]
+                    Control.div [ ] [
+                        Input.text [ Input.Option.Value model.GitHubPRUrl; Input.Option.OnChange (fun x -> GitHubPRUrlChanged (x.Value) |> dispatch) ]
+                    ]
+                ]
+            ]
+        ]
+    ]
+
 let errorBox elems =
     Container.container [] [
         Notification.notification [ Notification.Color IsDanger] [
@@ -537,6 +626,13 @@ let view (model : Model) (dispatch : Msg -> unit) =
                                 span [Style [Margin "0 0 0 .5em"]] [str "Url"]
                             ]
                         ]
+                        Tabs.tab [Tabs.Tab.IsActive model.InputTypeChoice.IsGitHubPR2] [
+
+                            a [OnClick (fun ev -> InputTypeChoiceChanged InputType.GitHubPR |> dispatch)] [
+                                Fa.i [Fa.IconOption.Icon "fab fa-github"] []
+                                span [Style [Margin "0 0 0 .5em"]] [str "GitHub Pull Request"]
+                            ]
+                        ]
                         Tabs.tab [Tabs.Tab.IsActive model.InputTypeChoice.IsRawText2] [
 
                             a [OnClick (fun ev -> InputTypeChoiceChanged InputType.RawText |> dispatch)] [
@@ -550,6 +646,8 @@ let view (model : Model) (dispatch : Msg -> unit) =
                         rawTextDiffBoxes model dispatch
                     | InputType.Url ->
                         urlDiffBoxes model dispatch
+                    | InputType.GitHubPR ->
+                        githubPRBoxes model dispatch
                 ]
             ]
         ]

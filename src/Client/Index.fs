@@ -337,6 +337,12 @@ let copyToClipboard element =
 let createToClipboardElement elementToCopy =
     Button.button [Button.Option.Props [Style [Margin ".3em"]]; Button.Option.OnClick(fun _ -> copyToClipboard elementToCopy)] [str "Copy to Clipboard"]
 
+let fugetLink (packageName : string) (version : string) =
+    sprintf "https://www.fuget.org/packages/%s/%s/" packageName version
+let fugetDiffLink (packageName : string) (oldVersion : string) (newVersion : string) =
+    sprintf "https://www.fuget.org/packages/%s/%s/lib/unknown/diff/%s/" packageName oldVersion newVersion
+
+
 let compareResults (paketDiff : PaketDiff) (model : Model) (dispatch : Msg -> unit) =
     let printPackageRich (xs : Shared.Package list) =
         xs
@@ -348,7 +354,9 @@ let compareResults (paketDiff : PaketDiff) (model : Model) (dispatch : Msg -> un
                 ]
                 for x in packages do
                     p [ Style [Margin ".3em"] ][
-                        str <| sprintf "\u00A0\u00A0%s - %s" x.PackageName x.Version
+                        a  [Href (fugetLink x.PackageName x.Version); Target "_blank"] [
+                            str <| sprintf "\u00A0\u00A0%s - %s" x.PackageName x.Version
+                        ]
                     ]
             ]
         )
@@ -359,7 +367,7 @@ let compareResults (paketDiff : PaketDiff) (model : Model) (dispatch : Msg -> un
             [
                 Markdown.li <| sprintf "%s - (%d)" groupName packages.Length
                 for x in packages do
-                    Markdown.lii 2 <| sprintf "%s - %s" x.PackageName x.Version
+                    Markdown.lii 2 <| sprintf "[%s - %s](%s)" x.PackageName x.Version (fugetLink x.PackageName x.Version)
                 str <| "\n"
             ]
         )
@@ -406,7 +414,10 @@ let compareResults (paketDiff : PaketDiff) (model : Model) (dispatch : Msg -> un
                         ]
                         for x in ps do
                             div [Style [MarginRight ".5em"] ] [
-                                str <| sprintf "\u00A0\u00A0\u00A0\u00A0%s - %s -> %s" x.PackageName  x.OlderVersion x.NewerVersion
+
+                                a  [Href (fugetDiffLink x.PackageName x.OlderVersion x.NewerVersion); Target "_blank"] [
+                                    str <| sprintf "\u00A0\u00A0\u00A0\u00A0%s - %s -> %s" x.PackageName  x.OlderVersion x.NewerVersion
+                                ]
                             ]
                 ]
 
@@ -430,7 +441,7 @@ let compareResults (paketDiff : PaketDiff) (model : Model) (dispatch : Msg -> un
                 for (group, ps) in packages |> List.groupBy(fun p -> p.SemVerChange) do
                     Markdown.lii 2 <| groupTitle group ps.Length
                     for x in ps do
-                        Markdown.lii 4 <| sprintf "%s - %s -> %s" x.PackageName x.OlderVersion x.NewerVersion
+                        Markdown.lii 4 <| sprintf "[%s - %s -> %s](%s)" x.PackageName x.OlderVersion x.NewerVersion (fugetDiffLink x.PackageName x.OlderVersion x.NewerVersion)
                 str "\n"
             ]
         )

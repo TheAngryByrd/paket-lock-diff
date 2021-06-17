@@ -340,7 +340,8 @@ let createToClipboardElement elementToCopy =
 let fugetLink (packageName : string) (version : string) =
     sprintf "https://www.fuget.org/packages/%s/%s/" packageName version
 let fugetDiffLink (packageName : string) (oldVersion : string) (newVersion : string) =
-    sprintf "https://www.fuget.org/packages/%s/%s/lib/unknown/diff/%s/" packageName oldVersion newVersion
+    // using anything for the framework moniker selects the first one. Setting it to "unknown" for now.
+    sprintf "https://www.fuget.org/packages/%s/%s/lib/unknown/diff/%s/" packageName newVersion oldVersion
 
 
 let compareResults (paketDiff : PaketDiff) (model : Model) (dispatch : Msg -> unit) =

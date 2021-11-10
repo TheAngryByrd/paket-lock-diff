@@ -7,7 +7,7 @@ nuget Fable.Fetch
 nuget FSharp.Core 5.0.0
 nuget Fable.Remoting.Giraffe
 nuget Saturn
-nuget Paket.Core 6.0.0-beta8
+nuget Paket.Core 6.2.1
 nuget Expecto
 
 nuget Fable.Core

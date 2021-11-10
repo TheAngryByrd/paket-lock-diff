@@ -68,7 +68,6 @@ module Asyncs =
     let parAsync = ParallelAsyncBuilder()
 
 module String =
-    open System
     let splitByNewlines (s : string) =
         // s.Split([|'\n'; '\r'|]) Using an array seems to trim the output also. WHY?
         s.Split('\n') |> Array.collect(fun x -> x.Split('\r'))
@@ -76,10 +75,7 @@ module String =
 module PaketComparer =
     open Paket
     open Paket.Domain
-
     open Shared
-
-
     type Package = {
         GroupName : GroupName
         PackageName : PackageName
@@ -202,13 +198,11 @@ module PaketComparer =
                 |> Array.Parallel.choose(findPackageByGroupAndName olderPaketLock.InstalledPackages)
                 |> Array.map Package.OfTuple
         }
-
         and! versionIncreaes = async {
             return
                 packagesChanged
                 |> Array.filter(fun p -> p.OlderVersion < p.NewerVersion)
         }
-
         and! versionDowngrades = async {
             return
                 packagesChanged

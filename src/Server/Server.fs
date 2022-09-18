@@ -284,6 +284,16 @@ let api (httpContext: HttpContext) = {
                 comparison
                 |> PaketComparer.diffToDTO
         }
+    versionInfo = fun () -> async {
+        let references = System.Reflection.Assembly.GetExecutingAssembly().GetReferencedAssemblies();
+        let paketCore = references |> Array.find(fun a -> a.Name.Contains("Paket.Core"))
+
+        let appVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString()
+        return {
+            PaketCore = paketCore.Version.ToString()
+            PaketLockDiff = appVersion
+        }
+    }
 }
 
 

@@ -52,6 +52,10 @@ type ParseError = {
     StackTrace: string
 }
 
+type VersionInfo = {
+    PaketLockDiff : string
+    PaketCore : string
+}
 
 type ErrorResponse<'a> = { error: 'a }
 
@@ -61,4 +65,5 @@ module Route =
 
 type IPaketLockDiffApi = {
     comparePaketLocks: PaketLocks -> Async<PaketDiff>
+    versionInfo: unit -> Async<VersionInfo>
 }

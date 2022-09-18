@@ -183,6 +183,7 @@ type Model = {
     NewerLockUrl: string
     GitHubPRUrl: string
     CompareResults: CompareResults
+    VersionInfo : VersionInfo option
 }
 
 
@@ -199,11 +200,14 @@ type Msg =
     | ComparisonFinished of Result<PaketDiff, exn>
     | InputTypeChoiceChanged of InputType
     | OutputTypeChoiceChanged of OutputType
+    | VersionInfoFetch
+    | VersionInfoFetched of Result<VersionInfo, exn>
 
 let paketLockDiffApi =
     Remoting.createApi ()
     |> Remoting.withRouteBuilder Route.builder
     |> Remoting.buildProxy<IPaketLockDiffApi>
+
 
 [<Literal>]
 let OlderLockFileUrlQueryParam = "olderLockFileUrl"
@@ -226,6 +230,7 @@ let init () : Model * Cmd<Msg> =
         [
             olderLockFileUrlCmd
             newerLockFileUrlCmd
+            Some VersionInfoFetch
         ]
         |> List.choose id
 
@@ -243,6 +248,7 @@ let init () : Model * Cmd<Msg> =
         NewerLockUrl = ""
         GitHubPRUrl = ""
         CompareResults = NotStarted
+        VersionInfo = None
     }
 
     model, cmd
@@ -402,6 +408,24 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
                 CompareResults = Errored e
             },
             Cmd.none
+    | VersionInfoFetch ->
+        let cmd =
+            Cmd.OfAsync.either
+                paketLockDiffApi.versionInfo
+                ()
+                (Ok
+                 >> VersionInfoFetched)
+                (Error
+                 >> VersionInfoFetched)
+
+        model , cmd
+    | VersionInfoFetched res ->
+        match res with
+        | Ok info ->
+            { model with VersionInfo = Some info}, Cmd.none
+        | Error e ->
+            printfn "%A" e
+            model, Cmd.none
 
 open Fable.React
 open Fable.React.Props
@@ -835,6 +859,23 @@ let errorBox elems =
         ]
     ]
 
+let footer (model : Model) dispatch =
+    match model.VersionInfo with
+    | Some info ->
+        Columns.columns [] [
+            Column.column  [] [
+                p [] [
+                    str $"Paket.Core Version {info.PaketCore}"
+                ]
+            ]
+            Column.column  [] [
+                p [] [
+                    str $"paket-lock-diff Version {info.PaketLockDiff}"
+                ]
+            ]
+        ]
+    | None -> nothing
+
 let view (model: Model) (dispatch: Msg -> unit) =
     div [] [
         Navbar.navbar [] [ Container.container [] [ navBrand ] ]
@@ -945,5 +986,8 @@ let view (model: Model) (dispatch: Msg -> unit) =
                         ]
                     ]
             | NotStarted -> ()
+        ]
+        Footer.footer [] [
+            footer model dispatch
         ]
     ]

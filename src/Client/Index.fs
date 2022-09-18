@@ -877,7 +877,7 @@ let footer (model : Model) dispatch =
     | None -> nothing
 
 let view (model: Model) (dispatch: Msg -> unit) =
-    div [] [
+    div [Class "flex-wrapper"] [
         Navbar.navbar [] [ Container.container [] [ navBrand ] ]
 
         Section.section [] [

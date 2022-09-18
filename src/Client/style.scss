@@ -1,6 +1,11 @@
-.footer {
-    position: absolute;
-    bottom: 0;
-    padding: 1rem;
-    width: 100%;
+
+.flex-wrapper {
+    display: flex;
+    min-height: 100vh;
+    flex-direction: column;
+    justify-content: space-between;
   }
+
+.footer {
+    padding: 1rem;
+}

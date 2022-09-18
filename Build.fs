@@ -30,7 +30,7 @@ Target.create "Bundle" (fun _ ->
 
 Target.create "Azure" (fun _ ->
     let web = webApp {
-        name "paket_lock_diff"
+        name "paket-lock-diff"
         zip_deploy "deploy"
     }
     let deployment = arm {
@@ -39,7 +39,7 @@ Target.create "Azure" (fun _ ->
     }
 
     deployment
-    |> Deploy.execute "paket_lock_diff" Deploy.NoParameters
+    |> Deploy.execute "paket_lock_diff_rg" Deploy.NoParameters
     |> ignore
 )
 

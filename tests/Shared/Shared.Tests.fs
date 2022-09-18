@@ -9,6 +9,5 @@ open Expecto
 open Shared
 
 let shared = testList "Shared" [
-    testCase "Empty string is not a valid description" <| fun _ ->
-        ()
+
 ]

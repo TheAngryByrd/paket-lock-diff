@@ -44,7 +44,6 @@ module Markdown =
     let li (v : string) =
         lii 0 v
 
-
 type OutputType =
 | Rich
 | Markdown
@@ -289,7 +288,7 @@ let navBrand =
             Navbar.Item.Props [ Href "https://github.com/TheAngryByrd/paket-lock-diff" ]
             Navbar.Item.IsActive false
         ] [
-            Fa.span [ Fa.Brand.Github; Fa.PullLeft ][ ]
+            Fa.span [ Fa.Brand.Github; Fa.PullLeft ] [ ]
             span [] [
                 str " GitHub Repo"
             ]
@@ -354,7 +353,7 @@ let compareResults (paketDiff : PaketDiff) (model : Model) (dispatch : Msg -> un
                     str <| sprintf "%s - %d" groupName packages.Length
                 ]
                 for x in packages do
-                    p [ Style [Margin ".3em"] ][
+                    p [ Style [Margin ".3em"] ] [
                         a  [Href (fugetLink x.PackageName x.Version); Target "_blank"] [
                             str <| sprintf "\u00A0\u00A0%s - %s" x.PackageName x.Version
                         ]
@@ -407,7 +406,7 @@ let compareResults (paketDiff : PaketDiff) (model : Model) (dispatch : Msg -> un
                             ]
                         ]
                     for (group, ps) in packages |> List.groupBy(fun p -> p.SemVerChange) do
-                        p [ Style [Margin ".3em"]][
+                        p [ Style [Margin ".3em"]] [
                             Field.div [ Field.IsGroupedMultiline ] [
                                 createTag group ps.Length
 

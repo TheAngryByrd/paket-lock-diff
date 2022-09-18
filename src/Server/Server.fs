@@ -137,6 +137,17 @@ module PaketComparer =
             VersionDowngrades = d.VersionDowngrades |> Array.map toPackageVersionDiffDTO |> Array.toList
         }
 
+
+    let calculateSemVerChange (olderVersion : SemVerInfo) (newerVersion : SemVerInfo) =
+        if olderVersion.Major <> newerVersion.Major then
+            SemVerChange.Major
+        elif olderVersion.Minor <> newerVersion.Minor then
+            SemVerChange.Minor
+        elif olderVersion.Patch <> newerVersion.Patch then
+            SemVerChange.Patch
+        else
+            SemVerChange.Other
+
     let compare (older, newer) = parAsync {
         let! olderPaketLock = async { return LockFile.Parse("old.lock", older) }
         and! newerPaketLock = async {return LockFile.Parse("new.lock", newer) }
@@ -156,15 +167,6 @@ module PaketComparer =
             |> Set.map(fun (g,p,_) -> g,p)
 
 
-        let calculateSemVerChange (olderVersion : SemVerInfo) (newerVersion : SemVerInfo) =
-            if olderVersion.Major <> newerVersion.Major then
-                SemVerChange.Major
-            elif olderVersion.Minor <> newerVersion.Minor then
-                SemVerChange.Minor
-            elif olderVersion.Patch <> newerVersion.Patch then
-                SemVerChange.Patch
-            else
-                SemVerChange.Other
 
         let packagesChanged =
             Set.intersect olderSet newerSet
@@ -274,4 +276,7 @@ let app =
         service_config  configureServices
     }
 
-run app
+[<EntryPoint>]
+let main _ =
+    run app
+    0

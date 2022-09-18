@@ -3,10 +3,13 @@ Fable.Elmish
 Fable.Elmish.React
 Fable.Elmish.Debugger
 Fable.Elmish.HMR
-Fable.FontAwesome.Free
-Fable.Fetch
 Fable.React
 Fable.Remoting.Client
+Feliz
+Feliz.Bulma
 Fulma
-Fable.Browser.Url
+Fable.Fetch
 Thoth.Fetch
+Fable.Browser.Url
+Fable.FontAwesome
+Fable.FontAwesome.Free

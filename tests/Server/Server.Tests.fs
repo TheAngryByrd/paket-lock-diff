@@ -16,17 +16,20 @@ let paketCompareTests = testList "Paket Compare" [
             SemVer.Parse version
         )
     let createPackageVersionDiff groupName packageName olderVersion newerVersion =
+        let oldVer = SemVer.Parse olderVersion
+        let newVer = SemVer.Parse newerVersion
         {
             PaketComparer.PackageVersionDiff.GroupName = GroupName groupName
             PaketComparer.PackageVersionDiff.PackageName = PackageName packageName
-            PaketComparer.PackageVersionDiff.OlderVersion = SemVer.Parse olderVersion
-            PaketComparer.PackageVersionDiff.NewerVersion = SemVer.Parse newerVersion
+            PaketComparer.PackageVersionDiff.OlderVersion = oldVer
+            PaketComparer.PackageVersionDiff.NewerVersion = newVer
+            PaketComparer.PackageVersionDiff.SemVerChange = PaketComparer.calculateSemVerChange oldVer newVer
         }
     let readFile = IO.File.ReadAllText >> String.splitByNewlines
     testCaseAsync "Additions" <| async {
         let older = "./paket-lock-files/addition-tests/old-paket.lock" |> readFile
         let newer = "./paket-lock-files/addition-tests/new-paket.lock" |> readFile
-        let result = PaketComparer.compare(older, newer)
+        let! result = PaketComparer.compare(older, newer)
 
         let expectedAdditions =
             [
@@ -49,7 +52,7 @@ let paketCompareTests = testList "Paket Compare" [
     testCaseAsync "Removals" <| async {
         let older = "./paket-lock-files/removal-tests/old-paket.lock" |> readFile
         let newer = "./paket-lock-files/removal-tests/new-paket.lock" |> readFile
-        let result = PaketComparer.compare(older, newer)
+        let! result = PaketComparer.compare(older, newer)
 
         let expectedRemovals =
             [
@@ -63,7 +66,7 @@ let paketCompareTests = testList "Paket Compare" [
     testCaseAsync "Version Upgrades" <| async {
         let older = "./paket-lock-files/version-increase-tests/old-paket.lock" |> readFile
         let newer = "./paket-lock-files/version-increase-tests/new-paket.lock" |> readFile
-        let result = PaketComparer.compare(older, newer)
+        let! result = PaketComparer.compare(older, newer)
 
         let expectedUpgrades =
             [
@@ -77,7 +80,7 @@ let paketCompareTests = testList "Paket Compare" [
     testCaseAsync "Version Downgrades" <| async {
         let older = "./paket-lock-files/version-decrease-tests/old-paket.lock" |> readFile
         let newer = "./paket-lock-files/version-decrease-tests/new-paket.lock" |> readFile
-        let result = PaketComparer.compare(older, newer)
+        let! result = PaketComparer.compare(older, newer)
 
         let expectedUpgrades =
             [

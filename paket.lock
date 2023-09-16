@@ -225,7 +225,7 @@ NUGET
       System.Security.Cryptography.Cng (>= 5.0)
       System.Security.Cryptography.Pkcs (>= 5.0)
     NuGet.Versioning (6.3)
-    Paket.Core (7.1.5)
+    Paket.Core (8.0.0-alpha002)
       Chessie (>= 0.6)
       FSharp.Core (6.0.3)
       Mono.Cecil (>= 0.11.3 < 0.12)

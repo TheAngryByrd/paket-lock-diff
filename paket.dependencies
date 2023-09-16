@@ -22,7 +22,7 @@ nuget Fake.Core.Target
 nuget Fake.IO.FileSystem
 nuget Fake.Core.ReleaseNotes
 nuget Farmer
-nuget Paket.Core
+nuget Paket.Core 8.0.0-alpha002
 
 nuget Fable.Fetch
 nuget Thoth.Fetch

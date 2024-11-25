@@ -46,7 +46,7 @@ Target.create "Azure" (fun _ ->
         add_resource web
     }
 
-    deployment |> Deploy.execute "SAFE-App" Deploy.NoParameters |> ignore)
+    deployment |> Deploy.execute "paket_lock_diff_rg" Deploy.NoParameters |> ignore)
 
 Target.create "Run" (fun _ ->
     run dotnet [ "restore"; "Application.sln" ] "."

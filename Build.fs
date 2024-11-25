@@ -17,7 +17,7 @@ let clientTestsPath = Path.getFullName "tests/Client"
 
 let release = ReleaseNotes.load "RELEASE_NOTES.md"
 
-let buildVersion = $"/p:Version={release.NugetVersion} /p:AssemblyVersion={release.NugetVersion}"
+let buildVersion = [$"/p:Version={release.NugetVersion}"; $"/p:AssemblyVersion={release.NugetVersion}"]
 
 Target.create "Clean" (fun _ ->
     Shell.cleanDir deployPath
@@ -28,7 +28,7 @@ Target.create "RestoreClientDependencies" (fun _ -> run npm [ "ci" ] ".")
 
 Target.create "Bundle" (fun _ ->
     [
-        "server", dotnet [ "publish"; "-c"; "Release"; "-o"; deployPath; buildVersion ] serverPath
+        "server", dotnet [ "publish"; "-c"; "Release"; "-o"; deployPath; yield! buildVersion ] serverPath
         "client", dotnet [ "fable"; "-o"; "output"; "-s"; "--run"; "npx"; "vite"; "build" ] clientPath
     ]
     |> runParallel)
@@ -36,7 +36,7 @@ Target.create "Bundle" (fun _ ->
 Target.create "Azure" (fun _ ->
     let web = webApp {
         name "paket-lock-diff"
-        operating_system OS.Linux
+        operating_system OS.Windows
         runtime_stack (DotNet "8.0")
         zip_deploy "deploy"
     }
@@ -53,7 +53,7 @@ Target.create "Run" (fun _ ->
     run dotnet [ "build" ] sharedPath
 
     [
-        "server", dotnet [ "watch"; "run"; "--no-restore"; buildVersion ] serverPath
+        "server", dotnet [ "watch"; "run"; "--no-restore"; yield! buildVersion ] serverPath
         "client", dotnet [ "fable"; "watch"; "-o"; "output"; "-s"; "--run"; "npx"; "vite" ] clientPath
     ]
     |> runParallel)

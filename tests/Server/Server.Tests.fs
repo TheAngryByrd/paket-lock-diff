@@ -7,6 +7,7 @@ open Shared
 open Server
 open Paket
 open Paket.Domain
+open Server.Core
 
 let paketCompareTests = testList "Paket Compare" [
     let createPackage groupName packageName version =

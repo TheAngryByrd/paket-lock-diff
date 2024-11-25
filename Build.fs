@@ -1,12 +1,11 @@
 open Fake.Core
 open Fake.IO
-open Fake.Core
 open Farmer
 open Farmer.Builders
 
 open Helpers
 
-initializeContext()
+initializeContext ()
 
 let sharedPath = Path.getFullName "src/Shared"
 let serverPath = Path.getFullName "src/Server"
@@ -22,64 +21,73 @@ let buildVersion = $"/p:Version={release.NugetVersion} /p:AssemblyVersion={relea
 
 Target.create "Clean" (fun _ ->
     Shell.cleanDir deployPath
-    run dotnet "fable clean --yes" clientPath // Delete *.fs.js files created by Fable
+    run dotnet [ "fable"; "clean"; "--yes" ] clientPath // Delete *.fs.js files created by Fable
 )
 
-Target.create "InstallClient" (fun _ -> run npm "install" ".")
+Target.create "RestoreClientDependencies" (fun _ -> run npm [ "ci" ] ".")
 
 Target.create "Bundle" (fun _ ->
-    [ "server", dotnet $"publish -c Release -o \"{deployPath}\" {buildVersion}" serverPath
-      "client", dotnet "fable -o output -s --run npm run build" clientPath ]
-    |> runParallel
-)
+    [
+        "server", dotnet [ "publish"; "-c"; "Release"; "-o"; deployPath; buildVersion ] serverPath
+        "client", dotnet [ "fable"; "-o"; "output"; "-s"; "--run"; "npx"; "vite"; "build" ] clientPath
+    ]
+    |> runParallel)
 
 Target.create "Azure" (fun _ ->
     let web = webApp {
         name "paket-lock-diff"
+        operating_system OS.Linux
+        runtime_stack (DotNet "8.0")
         zip_deploy "deploy"
     }
+
     let deployment = arm {
         location Location.WestEurope
         add_resource web
     }
 
-    deployment
-    |> Deploy.execute "paket_lock_diff_rg" Deploy.NoParameters
-    |> ignore
-)
+    deployment |> Deploy.execute "SAFE-App" Deploy.NoParameters |> ignore)
 
 Target.create "Run" (fun _ ->
-    run dotnet "build" sharedPath
-    [ "server", dotnet $"watch run -- {buildVersion}" serverPath
-      "client", dotnet "fable watch -o output -s --run npm run start" clientPath ]
-    |> runParallel
+    run dotnet [ "restore"; "Application.sln" ] "."
+    run dotnet [ "build" ] sharedPath
+
+    [
+        "server", dotnet [ "watch"; "run"; "--no-restore"; buildVersion ] serverPath
+        "client", dotnet [ "fable"; "watch"; "-o"; "output"; "-s"; "--run"; "npx"; "vite" ] clientPath
+    ]
+    |> runParallel)
+
+let buildSharedTests () = run dotnet [ "build" ] sharedTestsPath
+
+Target.create "RunTestsHeadless" (fun _ ->
+    buildSharedTests ()
+
+    run dotnet [ "run" ] serverTestsPath
+    run dotnet [ "fable"; "-o"; "output" ] clientTestsPath
+    run npx [ "mocha"; "output" ] clientTestsPath
 )
 
-Target.create "RunTests" (fun _ ->
-    run dotnet "build" sharedTestsPath
-    [ "server", dotnet "watch run {buildVersion}" serverTestsPath
-      "client", dotnet "fable watch -o output -s --run npm run test:live" clientTestsPath ]
-    |> runParallel
-)
+Target.create "WatchRunTests" (fun _ ->
+    buildSharedTests ()
 
-Target.create "Format" (fun _ ->
-    run dotnet "fantomas . -r" "src"
-)
+    [
+        "server", dotnet [ "watch"; "run" ] serverTestsPath
+        "client", dotnet [ "fable"; "watch"; "-o"; "output"; "-s"; "--run"; "npx"; "vite" ] clientTestsPath
+    ]
+    |> runParallel)
+
+Target.create "Format" (fun _ -> run dotnet [ "fantomas"; "." ] ".")
 
 open Fake.Core.TargetOperators
 
 let dependencies = [
-    "Clean"
-        ==> "InstallClient"
-        ==> "Bundle"
-        ==> "Azure"
+    "Clean" ==> "RestoreClientDependencies" ==> "Bundle" ==> "Azure"
 
-    "Clean"
-        ==> "InstallClient"
-        ==> "Run"
+    "Clean" ==> "RestoreClientDependencies" ==> "Run"
 
-    "InstallClient"
-        ==> "RunTests"
+    "RestoreClientDependencies" ==> "RunTestsHeadless"
+    "RestoreClientDependencies" ==> "WatchRunTests"
 ]
 
 [<EntryPoint>]

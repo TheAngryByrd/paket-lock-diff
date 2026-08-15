@@ -1,2 +1,7 @@
-SAFE.Server
+FSharp.Core
+Giraffe
+Giraffe.Htmx
+Giraffe.ViewEngine.Htmx
 Paket.Core
+System.Net.Http
+System.Security.Cryptography.X509Certificates

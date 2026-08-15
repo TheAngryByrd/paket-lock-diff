@@ -18,16 +18,32 @@ When looking at git diffs between two lock files, it can be hard to get an overa
 1. [Give it a try here](https://paket-lock-diff.azurewebsites.net/)
 2. Copy and paste [this lock file](https://raw.githubusercontent.com/TheAngryByrd/MiniScaffold/0.22.0/paket.lock) into `Older LockFile` field.
 3. Copy and paste [this lock file](https://raw.githubusercontent.com/TheAngryByrd/MiniScaffold/master/paket.lock) into `Newer LockFile` field.
-4. The app should analyze the lock files and give you some results.
+4. Select **Raw Text**, click **Compare**, and review the results.
 
 ---
-## Install pre-requisites
+## Architecture
 
-You'll need to install the following pre-requisites in order to build SAFE applications
+The application renders its page and comparison results on the server with
+[Giraffe](https://giraffe.wiki/),
+[Giraffe.Htmx](https://git.bitbadger.solutions/bit-badger/Giraffe.Htmx), and the Giraffe view
+engine. [htmx](https://htmx.org/) posts the lock-file form and swaps the returned
+HTML fragment into the page.
 
-* [.NET SDK](https://www.microsoft.com/net/download) 8.0 or higher
-* [Node 18](https://nodejs.org/en/download/) or higher
-* [NPM 9](https://www.npmjs.com/package/npm) or higher
+A small [Fable](https://fable.io/) module remains for work that must happen in
+the browser: fetching user-provided URLs without introducing a server-side SSRF
+endpoint, resolving GitHub pull-request files, maintaining shareable URL state,
+switching output tabs, and copying reports to the clipboard.
+
+## Install prerequisites
+
+To build and run the application you need:
+
+* [.NET 10 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
+
+The headless client tests additionally require:
+
+* [Node.js 20.19+ or 22.12+](https://nodejs.org/en/download/)
+* [npm 10](https://www.npmjs.com/) or higher
 
 ## Starting the application
 
@@ -37,17 +53,48 @@ To concurrently run the server and the client components in watch mode use the f
 dotnet run
 ```
 
-Then open `http://localhost:8080` in your browser.
+Then open `http://localhost:5000` in your browser.
 
 The build project in root directory contains a couple of different build targets. You can specify them after `--` (target name is case-insensitive).
 
-To run concurrently server and client tests in watch mode (you can run this command in parallel to the previous one in new terminal):
+To run all server and client tests once:
+
+```bash
+dotnet run -- RunTestsHeadless
+```
+
+The original browser workflows are covered by Playwright tests written in F#.
+This target builds a production-style server, installs the matching Chromium
+revision, and runs the browser suite headlessly:
+
+```bash
+dotnet run -- RunBrowserTests
+```
+
+For an interactive browser run, use:
+
+```bash
+dotnet run -- RunBrowserTestsHeaded
+```
+
+To run the fast server/client tests and the browser suite together:
+
+```bash
+dotnet run -- RunAllTestsHeadless
+```
+
+Playwright traces, screenshots, browser errors, and server logs from failed
+scenarios are written beneath `.artifacts/e2e/results`. Linux environments must
+provide Playwright's Chromium system dependencies; the test executable also
+supports `install --with-deps chromium` for CI images that permit installing
+them.
+
+To run server and client tests in watch mode (you can run this command in a
+second terminal):
 
 ```bash
 dotnet run -- WatchRunTests
 ```
-
-Client tests are available under `http://localhost:8081` in your browser and server tests are running in watch mode in console.
 
 Finally, there are `Bundle` and `Azure` targets that you can use to package your app and deploy to Azure, respectively:
 
@@ -56,12 +103,16 @@ dotnet run -- Bundle
 dotnet run -- Azure
 ```
 
-## SAFE Stack Documentation
+## URL and GitHub inputs
 
-If you want to know more about the full Azure Stack and all of it's components (including Azure) visit the official [SAFE documentation](https://safe-stack.github.io/docs/).
+URL fetching stays in the browser, so the remote server must permit the request
+through CORS. GitHub pull-request comparisons use unauthenticated GitHub API
+requests and are therefore subject to GitHub's public rate limits.
 
-You will find more documentation about the used F# components at the following places:
+Documentation for the main components is available here:
 
-* [Saturn](https://saturnframework.org/)
+* [Giraffe](https://giraffe.wiki/)
+* [Giraffe.Htmx](https://git.bitbadger.solutions/bit-badger/Giraffe.Htmx)
+* [htmx](https://htmx.org/docs/)
 * [Fable](https://fable.io/docs/)
-* [Elmish](https://elmish.github.io/elmish/)
+* [Paket](https://fsprojects.github.io/Paket/)

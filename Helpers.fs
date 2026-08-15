@@ -24,12 +24,15 @@ module Proc =
         |]
 
         let print color (colored: string) (line: string) =
-            lock locker (fun () ->
-                let currentColor = Console.ForegroundColor
-                Console.ForegroundColor <- color
-                Console.Write colored
-                Console.ForegroundColor <- currentColor
-                Console.WriteLine line)
+            lock
+                locker
+                (fun () ->
+                    let currentColor = Console.ForegroundColor
+                    Console.ForegroundColor <- color
+                    Console.Write colored
+                    Console.ForegroundColor <- currentColor
+                    Console.WriteLine line
+                )
 
         let onStdout index name (line: string) =
             let color = colors.[index % colors.Length]
@@ -42,7 +45,10 @@ module Proc =
         let onStderr name (line: string) =
             let color = ConsoleColor.Red
 
-            if isNull line |> not then
+            if
+                isNull line
+                |> not
+            then
                 print color $"{name}: " line
 
         let redirect (index, (name, createProcess)) =
@@ -53,7 +59,11 @@ module Proc =
         let printStarting indexed =
             for (index, (name, c: CreateProcess<_>)) in indexed do
                 let color = colors.[index % colors.Length]
-                let wd = c.WorkingDirectory |> Option.defaultValue ""
+
+                let wd =
+                    c.WorkingDirectory
+                    |> Option.defaultValue ""
+
                 let exe = c.Command.Executable
                 let args = c.Command.Arguments.ToStartInfo
                 print color $"{name}: {wd}> {exe} {args}" ""
@@ -92,10 +102,15 @@ let npm args dir = createProcessFromPath "npm" args dir
 
 let npx args dir = createProcessFromPath "npx" args dir
 
-let run proc arg dir = proc arg dir |> Proc.run |> ignore
+let run proc arg dir =
+    proc arg dir
+    |> Proc.run
+    |> ignore
 
 let runParallel processes =
-    processes |> Proc.Parallel.run |> ignore
+    processes
+    |> Proc.Parallel.run
+    |> ignore
 
 let runOrDefault args =
     try

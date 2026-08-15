@@ -1,6 +1,4 @@
-SAFE.Client
+FSharp.Core
+Fable.Core
+Fable.Browser.Dom
 Fable.Fetch
-Fable.Browser.Url
-Fable.FontAwesome.Free
-Thoth.Fetch
-Feliz.Bulma

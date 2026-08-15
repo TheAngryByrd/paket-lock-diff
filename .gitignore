@@ -3,6 +3,8 @@
 *.fs.js.map
 .fake/
 .farmer/
+.artifacts/
+.testagent/
 .idea/
 .ionide/
 .vs/
@@ -10,6 +12,7 @@ deploy/
 obj/
 bin/
 output/
+src/Server/wwwroot/output/
 packages/
 paket-files/
 node_modules/

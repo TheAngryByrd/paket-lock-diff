@@ -12,12 +12,11 @@ module PaketComparer =
     open Paket.Domain
     open Shared
 
-    type Package =
-        {
-            GroupName: GroupName
-            PackageName: PackageName
-            Version: SemVerInfo
-        }
+    type Package = {
+        GroupName: GroupName
+        PackageName: PackageName
+        Version: SemVerInfo
+    } with
 
         static member OfTuple(groupName, packageName, version) = {
             GroupName = groupName
@@ -137,15 +136,14 @@ module PaketComparer =
                 let newer = findPackageByGroupAndName newerPaketLock.InstalledPackages (g, p)
 
                 match older, newer with
-                | Some (_, _, olderVersion), Some (_, _, newerVersion) ->
-                    Some
-                        {
-                            GroupName = g
-                            PackageName = p
-                            OlderVersion = olderVersion
-                            NewerVersion = newerVersion
-                            SemVerChange = calculateSemVerChange olderVersion newerVersion
-                        }
+                | Some(_, _, olderVersion), Some(_, _, newerVersion) ->
+                    Some {
+                        GroupName = g
+                        PackageName = p
+                        OlderVersion = olderVersion
+                        NewerVersion = newerVersion
+                        SemVerChange = calculateSemVerChange olderVersion newerVersion
+                    }
                 | _ -> None
             )
 

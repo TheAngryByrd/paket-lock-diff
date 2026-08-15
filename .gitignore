@@ -4,6 +4,7 @@
 .fake/
 .farmer/
 .artifacts/
+.testagent/
 .idea/
 .ionide/
 .vs/

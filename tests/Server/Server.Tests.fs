@@ -241,6 +241,65 @@ let viewTests =
                 "old?a=1&amp;b=2"
                 "User-provided URLs should be HTML encoded"
 
+        testCase "Initial page renders an accessible theme control"
+        <| fun _ ->
+            let versionInfo = {
+                PaketCore = "10.3.1"
+                PaketLockDiff = "2.0.0"
+            }
+
+            let inputUrls: Views.InputUrls = {
+                OlderLockFileUrl = ""
+                NewerLockFileUrl = ""
+                GitHubPullRequestUrl = ""
+            }
+
+            let markup =
+                Views.page Views.InputType.Url inputUrls versionInfo
+                |> RenderView.AsString.htmlNode
+
+            Expect.stringContains
+                markup
+                "name=\"color-scheme\" content=\"light dark\""
+                "The page should advertise support for light and dark color schemes"
+
+            Expect.stringContains
+                markup
+                "class=\"navbar-menu is-active\""
+                "The navbar should remain visible on mobile"
+
+            Expect.stringContains
+                markup
+                "class=\"navbar-end\""
+                "The theme control should render at the end of the navbar"
+
+            Expect.stringContains
+                markup
+                "aria-label=\"Primary\""
+                "The navbar should expose an accessible landmark name"
+
+            Expect.stringContains
+                markup
+                "for=\"theme-select\">Theme</label>"
+                "The visible theme label should identify its select control"
+
+            Expect.stringContains
+                markup
+                "<select id=\"theme-select\" data-theme-control=\"true\">"
+                "The native theme select should expose the Fable enhancement hook"
+
+            Expect.stringContains
+                markup
+                "value=\"auto\" selected=\"selected\">Auto</option>"
+                "Auto should be the selected server-rendered default"
+
+            Expect.stringContains
+                markup
+                "value=\"light\">Light</option>"
+                "Light should be available"
+
+            Expect.stringContains markup "value=\"dark\">Dark</option>" "Dark should be available"
+
         testCase "Comparison results include rich Markdown and JSON output"
         <| fun _ ->
             let diff: PaketDiff = {

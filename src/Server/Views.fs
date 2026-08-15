@@ -47,37 +47,66 @@ module Views =
     let private fugetDiffLink (packageName: string) (oldVersion: string) (newVersion: string) =
         $"https://www.fuget.org/packages/{packageName}/{newVersion}/lib/unknown/diff/{oldVersion}/"
 
+    let private themeControl =
+        div [ _class "navbar-item theme-control" ] [
+            label [
+                _class "label is-small"
+                _for "theme-select"
+            ] [ str "Theme" ]
+            div [ _class "control theme-control__field" ] [
+                div [ _class "select is-small is-fullwidth" ] [
+                    select [
+                        _id "theme-select"
+                        attr "data-theme-control" "true"
+                    ] [
+                        option [
+                            _value "auto"
+                            attr "selected" "selected"
+                        ] [ str "Auto" ]
+                        option [ _value "light" ] [ str "Light" ]
+                        option [ _value "dark" ] [ str "Dark" ]
+                    ]
+                ]
+            ]
+        ]
+
     let private navBar =
-        nav [ _class "navbar" ] [
+        nav [
+            _class "navbar"
+            attr "aria-label" "Primary"
+        ] [
             div [ _class "container" ] [
-                div [ _class "navbar-start" ] [
-                    a [
-                        _class "navbar-item"
-                        _href "https://github.com/TheAngryByrd/paket-lock-diff"
-                        _target "_blank"
-                        _rel "noreferrer"
-                    ] [
-                        span [ _class "icon" ] [ i [ _class "fa-brands fa-github" ] [] ]
-                        span [] [ str "GitHub Repo" ]
+                div [ _class "navbar-menu is-active" ] [
+                    div [ _class "navbar-start" ] [
+                        a [
+                            _class "navbar-item"
+                            _href "https://github.com/TheAngryByrd/paket-lock-diff"
+                            _target "_blank"
+                            _rel "noreferrer"
+                        ] [
+                            span [ _class "icon" ] [ i [ _class "fa-brands fa-github" ] [] ]
+                            span [] [ str "GitHub Repo" ]
+                        ]
+                        a [
+                            _class "navbar-item"
+                            _href "https://github.com/fsprojects/Paket"
+                            _target "_blank"
+                            _rel "noreferrer"
+                        ] [
+                            span [ _class "icon" ] [ i [ _class "fa-solid fa-box-open" ] [] ]
+                            span [] [ str "Paket" ]
+                        ]
+                        a [
+                            _class "navbar-item"
+                            _href "https://giraffe.wiki/"
+                            _target "_blank"
+                            _rel "noreferrer"
+                        ] [
+                            span [ _class "icon" ] [ i [ _class "fa-solid fa-server" ] [] ]
+                            span [] [ str "Giraffe" ]
+                        ]
                     ]
-                    a [
-                        _class "navbar-item"
-                        _href "https://github.com/fsprojects/Paket"
-                        _target "_blank"
-                        _rel "noreferrer"
-                    ] [
-                        span [ _class "icon" ] [ i [ _class "fa-solid fa-box-open" ] [] ]
-                        span [] [ str "Paket" ]
-                    ]
-                    a [
-                        _class "navbar-item"
-                        _href "https://giraffe.wiki/"
-                        _target "_blank"
-                        _rel "noreferrer"
-                    ] [
-                        span [ _class "icon" ] [ i [ _class "fa-solid fa-server" ] [] ]
-                        span [] [ str "Giraffe" ]
-                    ]
+                    div [ _class "navbar-end" ] [ themeControl ]
                 ]
             ]
         ]
@@ -584,6 +613,10 @@ module Views =
                 meta [
                     _name "viewport"
                     _content "width=device-width, initial-scale=1"
+                ]
+                meta [
+                    _name "color-scheme"
+                    _content "light dark"
                 ]
                 title [] [ str "Paket Lock Diff Tool" ]
                 link [

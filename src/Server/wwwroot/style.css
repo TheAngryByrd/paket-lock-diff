@@ -1,3 +1,15 @@
+:root {
+    color-scheme: light dark;
+}
+
+html[data-theme="light"] {
+    color-scheme: light;
+}
+
+html[data-theme="dark"] {
+    color-scheme: dark;
+}
+
 .flex-wrapper {
     display: flex;
     min-height: 100vh;
@@ -7,6 +19,21 @@
 
 .footer {
     padding: 1rem;
+}
+
+.theme-control {
+    align-items: center;
+    display: flex;
+    gap: 0.5rem;
+}
+
+.theme-control .label {
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+.theme-control__field {
+    min-width: 7rem;
 }
 
 .lock-input {
@@ -38,4 +65,11 @@
 .htmx-request .htmx-indicator,
 .htmx-request.htmx-indicator {
     opacity: 1;
+}
+
+@media screen and (max-width: 1023px) {
+    .theme-control__field {
+        flex: 1;
+        min-width: 0;
+    }
 }

@@ -31,6 +31,12 @@ let private FormGenerationAttribute = "data-fetch-generation"
 [<Literal>]
 let private SelectedOutputAttribute = "data-selected-output"
 
+[<Literal>]
+let private ThemeStorageKey = "paket-lock-diff-theme"
+
+[<Literal>]
+let private ThemeControlSelector = "[data-theme-control]"
+
 let private httpFailureMessage url (response: Response) body =
     let status =
         if String.IsNullOrWhiteSpace response.StatusText then
@@ -406,6 +412,72 @@ module private BrowserInterop =
         jsNative
 
 module private Client =
+    let private normalizeTheme =
+        function
+        | "light" -> "light"
+        | "dark" -> "dark"
+        | _ -> "auto"
+
+    let private removeStoredTheme () =
+        try
+            Browser.WebStorage.localStorage.removeItem ThemeStorageKey
+        with _ ->
+            ()
+
+    let private readStoredTheme () =
+        try
+            let theme =
+                Browser.WebStorage.localStorage.getItem ThemeStorageKey
+                |> normalizeTheme
+
+            if theme = "auto" then
+                removeStoredTheme ()
+
+            theme
+        with _ ->
+            removeStoredTheme ()
+            "auto"
+
+    let private storeTheme theme =
+        try
+            Browser.WebStorage.localStorage.setItem (ThemeStorageKey, theme)
+        with _ ->
+            ()
+
+    let private synchronizeThemeControls theme =
+        BrowserInterop.querySelectorAll ThemeControlSelector
+        |> Array.iter (fun control -> BrowserInterop.setValue (control, theme))
+
+    let private currentTheme () =
+        document.documentElement.getAttribute "data-theme"
+        |> normalizeTheme
+
+    let private applyTheme value =
+        let root = document.documentElement
+        let theme = normalizeTheme value
+
+        let appliedTheme =
+            match theme with
+            | "light"
+            | "dark" ->
+                root.setAttribute ("data-theme", theme)
+                storeTheme theme
+                theme
+            | _ ->
+                root.removeAttribute "data-theme"
+                removeStoredTheme ()
+                "auto"
+
+        synchronizeThemeControls appliedTheme
+
+    let private handleThemeChange (event: Event) =
+        let control = BrowserInterop.closestFromEvent (event, ThemeControlSelector)
+
+        if not (isNullOrUndefined control) then
+            control
+            |> BrowserInterop.value
+            |> applyTheme
+
     let private tryFind selector =
         let element = document.querySelector selector
 
@@ -816,9 +888,13 @@ module private Client =
             root.getAttribute "data-paket-lock-client-ready"
             <> "true"
         then
+            readStoredTheme ()
+            |> applyTheme
+
             root.setAttribute ("data-paket-lock-client-ready", "true")
             BrowserInterop.addCapturingEventListener (document, "submit", handleSubmit)
             BrowserInterop.addEventListener (document, "click", handleClick)
+            BrowserInterop.addEventListener (document, "change", handleThemeChange)
 
             BrowserInterop.addEventListener (
                 document,
@@ -826,6 +902,9 @@ module private Client =
                 fun _ ->
                     hydrateInputsFromQueryString ()
                     restoreSelectedOutput ()
+
+                    currentTheme ()
+                    |> synchronizeThemeControls
             )
 
             BrowserInterop.addEventListener (

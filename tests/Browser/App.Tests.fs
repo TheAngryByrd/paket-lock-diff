@@ -212,6 +212,167 @@ module AppTests =
 
             BrowserFixture.testCase
                 configuration
+                "theme setting supports Auto Light and Dark across reloads"
+            <| fun page -> async {
+                let storageKey = "paket-lock-diff-theme"
+
+                do!
+                    page.EmulateMediaAsync(PageEmulateMediaOptions(ColorScheme = ColorScheme.Dark))
+                    |> awaitTask
+
+                do! BrowserFixture.gotoReady page "/"
+
+                let themeSelect = page.Locator("#theme-select")
+
+                let! themeSelectCount =
+                    themeSelect.CountAsync()
+                    |> Async.AwaitTask
+
+                Expect.equal themeSelectCount 1 "The page should provide one theme setting"
+
+                let! initialTheme =
+                    themeSelect.InputValueAsync()
+                    |> Async.AwaitTask
+
+                Expect.equal initialTheme "auto" "The theme should initially follow the system"
+
+                let! systemPrefersDark =
+                    page.EvaluateAsync<bool>(
+                        "() => window.matchMedia('(prefers-color-scheme: dark)').matches"
+                    )
+                    |> Async.AwaitTask
+
+                Expect.isTrue systemPrefersDark "The test browser should prefer dark mode"
+
+                let! initialThemeAttribute =
+                    page.Locator("html").GetAttributeAsync "data-theme"
+                    |> Async.AwaitTask
+
+                Expect.isNull
+                    initialThemeAttribute
+                    "Auto should let Bulma follow the system color scheme"
+
+                let! _ =
+                    themeSelect.SelectOptionAsync "light"
+                    |> Async.AwaitTask
+
+                let! lightThemeAttribute =
+                    page.Locator("html").GetAttributeAsync "data-theme"
+                    |> Async.AwaitTask
+
+                Expect.equal
+                    lightThemeAttribute
+                    "light"
+                    "Light should override the dark system theme"
+
+                let! storedLightTheme =
+                    page.EvaluateAsync<string>("key => localStorage.getItem(key)", storageKey)
+                    |> Async.AwaitTask
+
+                Expect.equal storedLightTheme "light" "The Light setting should be stored"
+
+                let! _ =
+                    page.ReloadAsync(PageReloadOptions(WaitUntil = WaitUntilState.DOMContentLoaded))
+                    |> Async.AwaitTask
+
+                do! waitForClientAfterReload page
+
+                let! reloadedTheme =
+                    themeSelect.InputValueAsync()
+                    |> Async.AwaitTask
+
+                Expect.equal reloadedTheme "light" "The Light setting should survive a reload"
+
+                let! reloadedThemeAttribute =
+                    page.Locator("html").GetAttributeAsync "data-theme"
+                    |> Async.AwaitTask
+
+                Expect.equal
+                    reloadedThemeAttribute
+                    "light"
+                    "The stored Light setting should remain forced after a reload"
+
+                do!
+                    page.EmulateMediaAsync(PageEmulateMediaOptions(ColorScheme = ColorScheme.Light))
+                    |> awaitTask
+
+                let! systemPrefersLight =
+                    page.EvaluateAsync<bool>(
+                        "() => window.matchMedia('(prefers-color-scheme: light)').matches"
+                    )
+                    |> Async.AwaitTask
+
+                Expect.isTrue systemPrefersLight "The test browser should prefer light mode"
+
+                let! _ =
+                    themeSelect.SelectOptionAsync "dark"
+                    |> Async.AwaitTask
+
+                let! darkThemeAttribute =
+                    page.Locator("html").GetAttributeAsync "data-theme"
+                    |> Async.AwaitTask
+
+                Expect.equal darkThemeAttribute "dark" "Dark should force Bulma's dark theme"
+
+                let! storedDarkTheme =
+                    page.EvaluateAsync<string>("key => localStorage.getItem(key)", storageKey)
+                    |> Async.AwaitTask
+
+                Expect.equal storedDarkTheme "dark" "The Dark setting should be stored"
+
+                let! _ =
+                    themeSelect.SelectOptionAsync "auto"
+                    |> Async.AwaitTask
+
+                let! autoThemeAttribute =
+                    page.Locator("html").GetAttributeAsync "data-theme"
+                    |> Async.AwaitTask
+
+                Expect.isNull autoThemeAttribute "Auto should remove the forced Bulma theme"
+
+                let! storedAutoTheme =
+                    page.EvaluateAsync<string>("key => localStorage.getItem(key)", storageKey)
+                    |> Async.AwaitTask
+
+                Expect.isNull storedAutoTheme "Auto should remove the stored theme override"
+
+                let! _ =
+                    page.EvaluateAsync("key => localStorage.setItem(key, 'sepia')", storageKey)
+                    |> Async.AwaitTask
+
+                do!
+                    page.EmulateMediaAsync(PageEmulateMediaOptions(ColorScheme = ColorScheme.Dark))
+                    |> awaitTask
+
+                let! _ =
+                    page.ReloadAsync(PageReloadOptions(WaitUntil = WaitUntilState.DOMContentLoaded))
+                    |> Async.AwaitTask
+
+                do! waitForClientAfterReload page
+
+                let! fallbackTheme =
+                    themeSelect.InputValueAsync()
+                    |> Async.AwaitTask
+
+                Expect.equal fallbackTheme "auto" "An invalid stored theme should fall back to Auto"
+
+                let! fallbackThemeAttribute =
+                    page.Locator("html").GetAttributeAsync "data-theme"
+                    |> Async.AwaitTask
+
+                Expect.isNull
+                    fallbackThemeAttribute
+                    "Invalid storage should not force a Bulma theme"
+
+                let! invalidThemeAfterReload =
+                    page.EvaluateAsync<string>("key => localStorage.getItem(key)", storageKey)
+                    |> Async.AwaitTask
+
+                Expect.isNull invalidThemeAfterReload "The invalid stored theme should be removed"
+            }
+
+            BrowserFixture.testCase
+                configuration
                 "URL comparison fetches both locks and restores a shared report after reload"
             <| fun page -> async {
                 let mutable olderFetches = 0

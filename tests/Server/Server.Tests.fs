@@ -3,12 +3,56 @@ module Server.Tests
 open Expecto
 
 open System
+open System.Collections.Generic
+open System.IO
+open System.Threading.Tasks
+open Microsoft.AspNetCore.Http
+open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Logging
+open Microsoft.Extensions.Primitives
 open Shared
 open Server
 open Paket
 open Paket.Domain
 open Server.Core
 open Giraffe.ViewEngine
+
+type private CapturedLog = {
+    Level: LogLevel
+    Message: string
+    Error: exn
+}
+
+type private EmptyScope() =
+    interface IDisposable with
+        member _.Dispose() = ()
+
+type private CapturingLogger(logs: ResizeArray<CapturedLog>) =
+    interface ILogger with
+        member _.BeginScope<'TState>(_: 'TState) : IDisposable = new EmptyScope()
+        member _.IsEnabled _ = true
+
+        member _.Log<'TState>
+            (
+                level: LogLevel,
+                _: EventId,
+                state: 'TState,
+                error: exn,
+                formatter: Func<'TState, exn, string>
+            ) =
+            logs.Add {
+                Level = level
+                Message = formatter.Invoke(state, error)
+                Error = error
+            }
+
+type private CapturingLoggerFactory(logs: ResizeArray<CapturedLog>) =
+    let logger = CapturingLogger(logs) :> ILogger
+
+    interface ILoggerFactory with
+        member _.AddProvider _ = ()
+        member _.CreateLogger _ = logger
+        member _.Dispose() = ()
 
 let paketCompareTests =
     testList "Paket Compare" [
@@ -266,12 +310,80 @@ let viewTests =
                 "Stack traces should not be exposed to the browser"
     ]
 
+let handlerTests =
+    testList "Giraffe handlers" [
+        testCaseAsync "Comparison failures log safe diagnostic exception context"
+        <| async {
+            let secret = "TOP_SECRET_DO_NOT_LOG"
+            let logs = ResizeArray<CapturedLog>()
+            use loggerFactory = new CapturingLoggerFactory(logs) :> ILoggerFactory
+
+            use services =
+                ServiceCollection()
+                    .AddSingleton<ILoggerFactory>(loggerFactory)
+                    .BuildServiceProvider()
+
+            let context = DefaultHttpContext(RequestServices = services)
+            context.TraceIdentifier <- "comparison-test-trace"
+            context.Response.Body <- new MemoryStream()
+
+            let form = Dictionary<string, StringValues>()
+            form["olderLockFile"] <- StringValues secret
+
+            form["newerLockFile"] <-
+                StringValues
+                    """STORAGE: NONE
+NUGET
+  remote: https://api.nuget.org/v3/index.json
+    FSharp.Core (4.7.2)
+"""
+
+            context.Request.Form <- FormCollection form
+
+            let next context = Task.FromResult(Some context)
+
+            let! _ =
+                Handlers.compare next context
+                |> Async.AwaitTask
+
+            Expect.hasLength logs 1 "A failed comparison should create one diagnostic log"
+            let logged = logs[0]
+
+            Expect.equal logged.Level LogLevel.Warning "Comparison failures should be warnings"
+            Expect.isNotNull logged.Error "The warning should carry exception context"
+
+            Expect.stringContains
+                logged.Message
+                context.TraceIdentifier
+                "The warning should correlate to the failed request"
+
+            Expect.stringContains
+                logged.Error.Message
+                "exception details were redacted"
+                "The diagnostic exception should explain its safe redaction"
+
+            Expect.isFalse
+                (String.IsNullOrWhiteSpace logged.Error.StackTrace)
+                "The diagnostic exception should retain method-level stack context"
+
+            Expect.stringContains
+                logged.Error.StackTrace
+                "Paket"
+                "The safe stack should identify the failing subsystem"
+
+            Expect.isFalse
+                ($"{logged.Message}{Environment.NewLine}{logged.Error}".Contains secret)
+                "Submitted lock-file content must not be written to logs"
+        }
+    ]
+
 
 let all =
     testList "All" [
         Shared.Tests.shared
         paketCompareTests
         viewTests
+        handlerTests
     ]
 
 [<EntryPoint>]

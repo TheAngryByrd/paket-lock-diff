@@ -40,6 +40,46 @@ module Handlers =
         |> RenderView.AsString.htmlNode
         |> htmlString
 
+    let private sanitizedExceptionForLogging (error: exn) =
+        let exceptionType = error.GetType().FullName
+
+        let stackTrace =
+            Diagnostics.StackTrace(error, false).GetFrames()
+            |> Option.ofObj
+            |> Option.defaultValue Array.empty
+            |> Array.choose (fun frame ->
+                let methodInfo = frame.GetMethod()
+
+                if isNull methodInfo then
+                    None
+                else
+                    let declaringType =
+                        methodInfo.DeclaringType
+                        |> Option.ofObj
+                        |> Option.bind (fun declaringType -> Option.ofObj declaringType.FullName)
+                        |> Option.defaultValue "<unknown>"
+
+                    Some $"   at {declaringType}.{methodInfo.Name}"
+            )
+            |> Array.truncate 12
+            |> String.concat Environment.NewLine
+
+        let stackTrace =
+            if String.IsNullOrWhiteSpace stackTrace then
+                "   at <stack unavailable>"
+            else
+                stackTrace
+
+        let sanitizedException =
+            InvalidOperationException(
+                $"Lock-file comparison failed with {exceptionType}; exception details were redacted."
+            )
+
+        Runtime.ExceptionServices.ExceptionDispatchInfo.SetRemoteStackTrace(
+            sanitizedException,
+            stackTrace
+        )
+
     let index: HttpHandler =
         fun next ctx ->
             let inputType =
@@ -113,8 +153,10 @@ module Handlers =
                             .CreateLogger("Server.Handlers")
 
                     logger.LogWarning(
-                        "Lock-file comparison failed with {ExceptionType}; request {TraceIdentifier}",
+                        sanitizedExceptionForLogging error,
+                        "Lock-file comparison failed with {ExceptionType} ({HResult}); request {TraceIdentifier}",
                         error.GetType().FullName,
+                        error.HResult,
                         ctx.TraceIdentifier
                     )
 

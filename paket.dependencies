@@ -1,20 +1,24 @@
 source https://api.nuget.org/v3/index.json
-framework: net8.0
+framework: net10.0
 storage: none
 
-nuget Expecto ~> 9
-nuget SAFE.Server ~> 5
-nuget SAFE.Client ~> 5
-nuget Fable.Fetch
-nuget Fable.Browser.Url
-nuget Fable.FontAwesome.Free
-nuget Thoth.Fetch
-nuget Feliz.Bulma
+nuget Expecto ~> 11
+nuget FSharp.Core ~> 10
+nuget Giraffe ~> 8
+nuget Giraffe.Htmx ~> 2
+nuget Giraffe.ViewEngine.Htmx ~> 2
+nuget Paket.Core ~> 10
+# Paket.Core still depends on Chessie/NETStandard.Library 1.6. Pin the two
+# advisory-affected facade packages to their patched final releases.
+nuget System.Net.Http ~> 4.3
+nuget System.Security.Cryptography.X509Certificates ~> 4.3
 
+nuget Fable.Core ~> 5
+nuget Fable.Browser.Dom ~> 2
+nuget Fable.Fetch ~> 2
+nuget Fable.Mocha ~> 2
 
-nuget Fake.Core.Target ~> 5
-nuget Fake.IO.FileSystem ~> 5
-nuget Fake.Core.ReleaseNotes ~> 5
+nuget Fake.Core.Target ~> 6
+nuget Fake.IO.FileSystem ~> 6
+nuget Fake.Core.ReleaseNotes ~> 6
 nuget Farmer ~> 1
-
-nuget Paket.Core ~> 9

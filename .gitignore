@@ -10,6 +10,7 @@ deploy/
 obj/
 bin/
 output/
+src/Server/wwwroot/output/
 packages/
 paket-files/
 node_modules/

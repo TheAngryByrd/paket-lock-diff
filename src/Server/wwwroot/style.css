@@ -1,0 +1,41 @@
+.flex-wrapper {
+    display: flex;
+    min-height: 100vh;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.footer {
+    padding: 1rem;
+}
+
+.lock-input {
+    min-height: 20rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.package-line {
+    margin: 0.3rem 0 0.3rem 1rem;
+}
+
+.package-line.nested {
+    margin-left: 2rem;
+}
+
+.semver-tags {
+    margin: 0.75rem 0 0.25rem 1rem;
+}
+
+.copy-button {
+    margin-bottom: 0.75rem;
+}
+
+.htmx-indicator {
+    opacity: 0;
+    transition: opacity 150ms ease-in;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+    opacity: 1;
+}

@@ -1,192 +1,14 @@
 module Index
 
-open Elmish
+open System
+open Browser.Dom
+open Browser.Types
 open Fable.Core
 open Fable.Core.JsInterop
-open Fable.Remoting.Client
-open Shared
 open Fetch
-open System
-open Browser
 
-type PaketLockFile = string
-
-type CompareResults =
-    | Finished of Shared.PaketDiff
-    | Loading
-    | NotStarted
-    | Errored of exn
-
-[<RequireQualifiedAccess>]
-type InputType =
-    | RawText
-    | Url
-    | GitHubPR
-
-    member x.IsRawText2 =
-        match x with
-        | RawText -> true
-        | _ -> false
-
-    member x.IsUrl2 =
-        match x with
-        | Url -> true
-        | _ -> false
-
-    member x.IsGitHubPR2 =
-        match x with
-        | GitHubPR -> true
-        | _ -> false
-
-
-module Json =
-    [<Emit("JSON.stringify($1, null, $0)")>]
-    let pretty (_space: int, _value: obj) : string = jsNative
-
-
-module Markdown =
-    let heading1 (v: string) =
-        Fable.React.Helpers.str <| sprintf "# %s\n\n" v
-
-    let heading2 (v: string) =
-        Fable.React.Helpers.str <| sprintf "## %s\n\n" v
-
-    let lii (indentSize: int) (v: string) =
-        let indent = List.init indentSize (fun _ -> "\u00A0") |> String.concat ""
-
-        Fable.React.Helpers.str <| sprintf "%s* %s\n" indent v
-
-    let li (v: string) = lii 0 v
-
-type OutputType =
-    | Rich
-    | Markdown
-    | Json
-
-    member x.IsRich2 =
-        match x with
-        | Rich -> true
-        | _ -> false
-
-    member x.IsMarkdown2 =
-        match x with
-        | Markdown -> true
-        | _ -> false
-
-    member x.IsJson2 =
-        match x with
-        | Json -> true
-        | _ -> false
-
-module Fetcher =
-    let getFromUrl (url) = async {
-        let! result = fetch url [] |> Async.AwaitPromise
-
-        if result.Ok then
-            let! body = result.text () |> Async.AwaitPromise
-
-            return Ok body
-        else
-            let! body = result.text () |> Async.AwaitPromise
-
-            return Error(Exception(body))
-    }
-
-module GitHub =
-    open System.Text.RegularExpressions
-    open Thoth.Fetch
-
-    type Contents = { download_url: string }
-
-    type PRFiles = {
-        filename: string
-        contents_url: string
-    }
-
-    type PRInfo = {
-        Owner: string
-        Repo: string
-        Number: string
-    }
-
-    let getInfoFromUrl (s: string) =
-        let regex = Regex("github.com\/(?<owner>\S+)\/(?<repo>\S+)\/pull\/(?<number>\d+)")
-        let m = regex.Match s
-
-        {
-            Owner = m.Groups.[1].Value
-            Repo = m.Groups.[2].Value
-            Number = m.Groups.[3].Value
-        }
-
-
-    let getContentsFromGitHub (info: PRInfo) = async {
-        let repoInfoUrl =
-            sprintf "https://api.github.com/repos/%s/%s/contents/paket.lock" info.Owner info.Repo
-
-        let! (repoInfo: Contents) =
-
-            Fetch.get (repoInfoUrl) |> Async.AwaitPromise
-
-        return repoInfo
-    }
-
-    let getPRFilesFromGitHub (info: PRInfo) = async {
-        let repoInfoUrl =
-            sprintf "https://api.github.com/repos/%s/%s/pulls/%s/files" info.Owner info.Repo info.Number
-
-        let! (repoInfo: PRFiles list) = Fetch.get (repoInfoUrl) |> Async.AwaitPromise
-
-        return repoInfo
-    }
-
-    let fetchOldAndNewer (prURL: string) = async {
-        let info = getInfoFromUrl prURL
-        let! contents = getContentsFromGitHub info
-        let! prFiles = getPRFilesFromGitHub info
-
-        let newerLockFile = prFiles |> List.find (fun f -> f.filename = "paket.lock")
-
-        let! (newerContents: Contents) = Fetch.get (newerLockFile.contents_url) |> Async.AwaitPromise
-
-        return contents.download_url, newerContents.download_url
-    }
-
-
-type Model = {
-    InputTypeChoice: InputType
-    OutputTypeChoice: OutputType
-    OlderLockFile: PaketLockFile
-    OlderLockUrl: string
-    NewerLockFile: PaketLockFile
-    NewerLockUrl: string
-    GitHubPRUrl: string
-    CompareResults: CompareResults
-    VersionInfo: VersionInfo option
-}
-
-
-type Msg =
-    | OlderLockChanged of PaketLockFile
-    | NewerLockChanged of PaketLockFile
-    | OlderLockUrlChanged of string
-    | OlderLockUrlFetched of Result<PaketLockFile, exn>
-    | NewerLockUrlChanged of string
-    | NewerLockUrlFetched of Result<PaketLockFile, exn>
-    | GitHubPRFetched of Result<string * string, exn>
-    | GitHubPRUrlChanged of string
-    | RequestComparison
-    | ComparisonFinished of Result<PaketDiff, exn>
-    | InputTypeChoiceChanged of InputType
-    | OutputTypeChoiceChanged of OutputType
-    | VersionInfoFetch
-    | VersionInfoFetched of Result<VersionInfo, exn>
-
-let paketLockDiffApi =
-    Remoting.createApi ()
-    |> Remoting.withRouteBuilder Route.builder
-    |> Remoting.buildProxy<IPaketLockDiffApi>
-
+[<Literal>]
+let LocksLoadedEvent = "paket-locks-loaded"
 
 [<Literal>]
 let OlderLockFileUrlQueryParam = "olderLockFileUrl"
@@ -194,661 +16,829 @@ let OlderLockFileUrlQueryParam = "olderLockFileUrl"
 [<Literal>]
 let NewerLockFileUrlQueryParam = "newerLockFileUrl"
 
-let init () : Model * Cmd<Msg> =
-    let queryStringBuilder = URLSearchParams.Create(Dom.window.location.search)
+[<Literal>]
+let GitHubPullRequestUrlQueryParam = "githubPullRequestUrl"
 
-    let olderLockFileUrlCmd =
-        queryStringBuilder.get OlderLockFileUrlQueryParam
-        |> Option.map OlderLockUrlChanged
+[<Literal>]
+let InputTypeQueryParam = "input"
 
-    let newerLockFileUrlCmd =
-        queryStringBuilder.get NewerLockFileUrlQueryParam
-        |> Option.map NewerLockUrlChanged
+[<Literal>]
+let private ComparisonGenerationAttribute = "data-comparison-generation"
 
-    let msgs =
-        [ olderLockFileUrlCmd; newerLockFileUrlCmd; Some VersionInfoFetch ]
-        |> List.choose id
+[<Literal>]
+let private FormGenerationAttribute = "data-fetch-generation"
 
-    let cmd = msgs |> List.map Cmd.ofMsg |> Cmd.batch
+let private httpFailureMessage url (response: Response) body =
+    let status =
+        if String.IsNullOrWhiteSpace response.StatusText then
+            string response.Status
+        else
+            $"{response.Status} {response.StatusText}"
 
-    let model = {
-        InputTypeChoice = InputType.Url
-        OutputTypeChoice = OutputType.Rich
-        OlderLockFile = ""
-        OlderLockUrl = ""
-        NewerLockFile = ""
-        NewerLockUrl = ""
-        GitHubPRUrl = ""
-        CompareResults = NotStarted
-        VersionInfo = None
+    let responseDetails =
+        if String.IsNullOrWhiteSpace body then
+            ""
+        else
+            let trimmedBody = body.Trim()
+
+            let abbreviatedBody =
+                if trimmedBody.Length > 500 then
+                    trimmedBody.Substring(0, 500)
+                    + "..."
+                else
+                    trimmedBody
+
+            $" Response: {abbreviatedBody}"
+
+    $"Request to {url} failed with HTTP {status}.{responseDetails}"
+
+module GitHub =
+    type PullRequestInfo = {
+        Owner: string
+        Repository: string
+        Number: string
     }
 
-    model, cmd
+    type private Contents = { download_url: string }
 
-let isNullOrWhitespace (s: string) =
-    match s with
-    | _ when isNullOrUndefined s -> true
-    | null -> true
-    | "" -> true
-    | _ when s.Trim() = "" -> true
-    | _ -> false
+    type private PullRequestFile = {
+        filename: string
+        contents_url: string
+    }
 
-let requestDiff (model: Model) =
-    if
-        not <| isNullOrWhitespace model.OlderLockFile
-        && not <| isNullOrWhitespace model.NewerLockFile
-    then
-        Cmd.ofMsg RequestComparison
+    let private isAsciiLetterOrDigit character =
+        (character
+         >= 'a'
+         && character
+            <= 'z')
+        || (character
+            >= 'A'
+            && character
+               <= 'Z')
+        || (character
+            >= '0'
+            && character
+               <= '9')
+
+    let private isOwnerCharacter character =
+        isAsciiLetterOrDigit character
+        || character = '-'
+
+    let private isRepositoryCharacter character =
+        isAsciiLetterOrDigit character
+        || character = '-'
+        || character = '_'
+        || character = '.'
+
+    let private isHexadecimalDigit character =
+        (character
+         >= '0'
+         && character
+            <= '9')
+        || (character
+            >= 'a'
+            && character
+               <= 'f')
+        || (character
+            >= 'A'
+            && character
+               <= 'F')
+
+    let private hasWellFormedPercentEscapes (value: string) =
+        let rec check index =
+            if
+                index
+                >= value.Length
+            then
+                true
+            elif
+                value.[index]
+                <> '%'
+            then
+                check (index + 1)
+            elif
+                index + 2 < value.Length
+                && isHexadecimalDigit value.[index + 1]
+                && isHexadecimalDigit value.[index + 2]
+            then
+                check (index + 3)
+            else
+                false
+
+        check 0
+
+    let private isValidSegment isAllowed (value: string) =
+        not (String.IsNullOrWhiteSpace value)
+        && value
+           |> Seq.forall isAllowed
+
+    let private isPositiveNumber (value: string) =
+        not (String.IsNullOrWhiteSpace value)
+        && value
+           |> Seq.forall (fun character ->
+               character
+               >= '0'
+               && character
+                  <= '9'
+           )
+        && value
+           |> Seq.exists ((<>) '0')
+
+    let private normalizePullRequestNumber (value: string) =
+        [
+            ".patch"
+            ".diff"
+        ]
+        |> List.tryPick (fun suffix ->
+            if value.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) then
+                Some(
+                    value.Substring(
+                        0,
+                        value.Length
+                        - suffix.Length
+                    )
+                )
+            else
+                None
+        )
+        |> Option.defaultValue value
+
+    let private tryDecodePathSegments (uri: Uri) =
+        try
+            Uri.UnescapeDataString uri.Query
+            |> ignore
+
+            Uri.UnescapeDataString uri.Fragment
+            |> ignore
+
+            uri.AbsolutePath.Split('/')
+            |> Array.filter (
+                String.IsNullOrWhiteSpace
+                >> not
+            )
+            |> Array.map Uri.UnescapeDataString
+            |> Ok
+        with _ ->
+            Error "The GitHub pull request URL contains an invalid escape sequence."
+
+    let private parsePullRequestUri (trimmedValue: string) (uri: Uri) =
+        let hasSupportedScheme =
+            String.Equals(uri.Scheme, "http", StringComparison.OrdinalIgnoreCase)
+            || String.Equals(uri.Scheme, "https", StringComparison.OrdinalIgnoreCase)
+
+        let hasGitHubHost =
+            String.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase)
+            || String.Equals(uri.Host, "www.github.com", StringComparison.OrdinalIgnoreCase)
+
+        let authorityStart =
+            trimmedValue.IndexOf("://", StringComparison.Ordinal)
+            + 3
+
+        let authorityEnd =
+            [|
+                '/'
+                '?'
+                '#'
+            |]
+            |> Array.map (fun separator ->
+                let index = trimmedValue.IndexOf(separator, authorityStart)
+                if index < 0 then trimmedValue.Length else index
+            )
+            |> Array.min
+
+        let hasUserInfo =
+            authorityStart
+            >= 3
+            && trimmedValue
+                .Substring(
+                    authorityStart,
+                    authorityEnd
+                    - authorityStart
+                )
+                .Contains('@')
+
+        if
+            not hasSupportedScheme
+            || not hasGitHubHost
+            || not uri.IsDefaultPort
+            || hasUserInfo
+        then
+            Error "Enter a pull request URL hosted on github.com."
+        else
+            match tryDecodePathSegments uri with
+            | Error error -> Error error
+            | Ok segments ->
+                if
+                    segments.Length < 4
+                    || segments.[2]
+                       <> "pull"
+                then
+                    Error
+                        "The URL must have the form https://github.com/{owner}/{repository}/pull/{number}."
+                elif
+                    not (isValidSegment isOwnerCharacter segments.[0])
+                    || segments.[0].StartsWith('-')
+                    || segments.[0].EndsWith('-')
+                then
+                    Error "The GitHub owner in the pull request URL is invalid."
+                elif
+                    not (isValidSegment isRepositoryCharacter segments.[1])
+                    || segments.[1] = "."
+                    || segments.[1] = ".."
+                then
+                    Error "The GitHub repository in the pull request URL is invalid."
+                else
+                    let pullRequestNumber = normalizePullRequestNumber segments.[3]
+
+                    if not (isPositiveNumber pullRequestNumber) then
+                        Error "The pull request number must be a positive integer."
+                    else
+                        Ok {
+                            Owner = segments.[0]
+                            Repository = segments.[1]
+                            Number = pullRequestNumber
+                        }
+
+    /// Parses a browser URL for a GitHub pull request. Query strings, fragments,
+    /// trailing slashes, and pull-request sub-pages such as /files are accepted.
+    let tryParsePullRequestUrl (value: string) : Result<PullRequestInfo, string> =
+        if String.IsNullOrWhiteSpace value then
+            Error "Enter a GitHub pull request URL."
+        else
+            let trimmedValue = value.Trim()
+
+            if not (hasWellFormedPercentEscapes trimmedValue) then
+                Error "The GitHub pull request URL contains an invalid escape sequence."
+            else
+                match Uri.TryCreate(trimmedValue, UriKind.Absolute) with
+                | false, _ -> Error "Enter an absolute GitHub pull request URL."
+                | true, uri -> parsePullRequestUri trimmedValue uri
+
+    let private githubHeaders =
+        requestHeaders [
+            HttpRequestHeaders.Accept "application/vnd.github+json"
+            HttpRequestHeaders.Custom("X-GitHub-Api-Version", "2022-11-28")
+        ]
+
+    let private fetchJson<'value> url = async {
+        let! response =
+            fetchUnsafe url [ githubHeaders ]
+            |> Async.AwaitPromise
+
+        if response.Ok then
+            return!
+                response.json<'value> ()
+                |> Async.AwaitPromise
+        else
+            let! body =
+                response.text ()
+                |> Async.AwaitPromise
+
+            return failwith (httpFailureMessage url response body)
+    }
+
+    let private requireDownloadUrl description (contents: Contents) =
+        if String.IsNullOrWhiteSpace contents.download_url then
+            failwith $"GitHub did not provide a download URL for the {description} paket.lock."
+
+        contents.download_url
+
+    /// Finds the default-branch and pull-request versions of paket.lock by using
+    /// the same GitHub contents and pull-files APIs as the original client.
+    let discoverLockUrls info = async {
+        let repositoryApi = $"https://api.github.com/repos/{info.Owner}/{info.Repository}"
+
+        let! olderContents = fetchJson<Contents> $"{repositoryApi}/contents/paket.lock"
+
+        let! pullRequestFiles =
+            fetchJson<PullRequestFile array>
+                $"{repositoryApi}/pulls/{info.Number}/files?per_page=100"
+
+        let pullRequestLock =
+            pullRequestFiles
+            |> Array.tryFind (fun file -> file.filename = "paket.lock")
+            |> Option.defaultWith (fun () ->
+                failwith "The pull request does not contain a root-level paket.lock file."
+            )
+
+        let! newerContents = fetchJson<Contents> pullRequestLock.contents_url
+
+        return
+            requireDownloadUrl "default branch" olderContents,
+            requireDownloadUrl "pull request" newerContents
+    }
+
+module private BrowserInterop =
+    [<Emit("new URLSearchParams($0)")>]
+    let createQueryParameters (_queryString: string) : obj = jsNative
+
+    [<Emit("$0.get($1)")>]
+    let getQueryParameter (_parameters: obj, _name: string) : string = jsNative
+
+    [<Emit("$0.set($1, $2)")>]
+    let setQueryParameter (_parameters: obj, _name: string, _value: string) : unit = jsNative
+
+    [<Emit("$0.toString()")>]
+    let queryString (_parameters: obj) : string = jsNative
+
+    [<Emit("$0 instanceof HTMLFormElement ? $0 : null")>]
+    let eventForm (_target: obj) : HTMLFormElement = jsNative
+
+    [<Emit("$0.target instanceof Element ? $0.target.closest($1) : null")>]
+    let closestFromEvent (_event: Event, _selector: string) : Element = jsNative
+
+    [<Emit("Array.from(document.querySelectorAll($0))")>]
+    let querySelectorAll (_selector: string) : Element array = jsNative
+
+    [<Emit("Array.from($0.querySelectorAll($1))")>]
+    let querySelectorAllWithin (_element: Element, _selector: string) : Element array = jsNative
+
+    [<Emit("$0.value")>]
+    let value (_element: Element) : string = jsNative
+
+    [<Emit("$0.value = $1")>]
+    let setValue (_element: Element, _value: string) : unit = jsNative
+
+    [<Emit("$0.disabled = $1")>]
+    let setDisabled (_element: Element, _disabled: bool) : unit = jsNative
+
+    [<Emit("$0.hidden = $1")>]
+    let setHidden (_element: Element, _hidden: bool) : unit = jsNative
+
+    [<Emit("($0.closest('li') || $0).classList.toggle('is-active', $1)")>]
+    let setTabActive (_element: Element, _active: bool) : unit = jsNative
+
+    [<Emit("$0.dispatchEvent(new CustomEvent($1, { bubbles: true }))")>]
+    let dispatchCustomEvent (_element: Element, _eventName: string) : unit = jsNative
+
+    [<Emit("navigator.clipboard.writeText($0)")>]
+    let writeClipboardText (_text: string) : JS.Promise<unit> = jsNative
+
+    [<Emit("('value' in $0) ? $0.value : ($0.textContent || '')")>]
+    let copyableText (_element: Element) : string = jsNative
+
+    [<Emit("$0.remove()")>]
+    let remove (_element: Element) : unit = jsNative
+
+    [<Emit("$0.delete($1)")>]
+    let deleteQueryParameter (_parameters: obj, _name: string) : unit = jsNative
+
+    [<Emit("history.replaceState(history.state, '', $0)")>]
+    let replaceCurrentUrl (_relativeUrl: string) : unit = jsNative
+
+    [<Emit("history.pushState({ paketLockClient: true }, '', $0)")>]
+    let pushClientUrl (_relativeUrl: string) : unit = jsNative
+
+    [<Emit("$0.requestSubmit()")>]
+    let requestSubmit (_form: HTMLFormElement) : unit = jsNative
+
+    [<Emit("$0.addEventListener($1, $2)")>]
+    let addEventListener (_target: obj, _eventName: string, _handler: Event -> unit) : unit =
+        jsNative
+
+    [<Emit("$0.addEventListener($1, $2, true)")>]
+    let addCapturingEventListener
+        (_target: obj, _eventName: string, _handler: Event -> unit)
+        : unit =
+        jsNative
+
+module private Client =
+    let private tryFind selector =
+        let element = document.querySelector selector
+
+        if isNullOrUndefined element then None else Some element
+
+    let private findResultsContainer () =
+        tryFind "#comparison-results"
+        |> Option.orElseWith (fun () -> tryFind "#results")
+
+    let private nextComparisonGeneration () =
+        let root = document.documentElement
+
+        let currentGeneration =
+            match Int64.TryParse(root.getAttribute ComparisonGenerationAttribute) with
+            | true, generation -> generation
+            | false, _ -> 0L
+
+        let generation =
+            string (
+                currentGeneration
+                + 1L
+            )
+
+        root.setAttribute (ComparisonGenerationAttribute, generation)
+        generation
+
+    let private isCurrentComparison generation =
+        document.documentElement.getAttribute ComparisonGenerationAttribute = generation
+
+    let private clearClientErrors () =
+        match findResultsContainer () with
+        | None -> ()
+        | Some container ->
+            BrowserInterop.querySelectorAllWithin (container, "[data-client-error]")
+            |> Array.iter BrowserInterop.remove
+
+    let private showError clearResults errorAttribute summary (error: exn) =
+        match findResultsContainer () with
+        | None -> console.error error
+        | Some container ->
+            if clearResults then
+                container.innerHTML <- ""
+            else
+                let previousError = container.querySelector $"[{errorAttribute}]"
+
+                if not (isNullOrUndefined previousError) then
+                    BrowserInterop.remove previousError
+
+            let notification = document.createElement "div"
+            notification.className <- "notification is-danger"
+            notification.setAttribute ("data-client-error", "")
+            notification.setAttribute (errorAttribute, "")
+            notification.setAttribute ("role", "alert")
+            notification.textContent <- $"{summary} {error.Message}"
+
+            container.appendChild notification
+            |> ignore
+
+    let private showFetchError error =
+        showError true "data-client-fetch-error" "Unable to load the paket.lock files." error
+
+    let private showClipboardError error =
+        showError false "data-client-copy-error" "Unable to copy the comparison output." error
+
+    let private requireNamedField (form: HTMLFormElement) name =
+        let field = form.querySelector $"[name=\"{name}\"]"
+
+        if isNullOrUndefined field then
+            failwith $"The form is missing its {name} field."
+
+        field
+
+    let private requiredValue form name =
+        let value =
+            (requireNamedField form name
+             |> BrowserInterop.value)
+                .Trim()
+
+        if String.IsNullOrWhiteSpace value then
+            failwith $"The {name} field is required."
+
+        value
+
+    let private setNamedValue form name value =
+        requireNamedField form name
+        |> fun field -> BrowserInterop.setValue (field, value)
+
+    let private setAllNamedValues name value =
+        BrowserInterop.querySelectorAll $"[name=\"{name}\"]"
+        |> Array.iter (fun field -> BrowserInterop.setValue (field, value))
+
+    let private relativeUrlWith parametersToUpdate =
+        let query = BrowserInterop.createQueryParameters window.location.search
+
+        for name, value in parametersToUpdate do
+            if String.IsNullOrWhiteSpace value then
+                BrowserInterop.deleteQueryParameter (query, name)
+            else
+                BrowserInterop.setQueryParameter (query, name, value)
+
+        let queryString = BrowserInterop.queryString query
+
+        let relativeUrl =
+            window.location.pathname
+            + (if queryString = "" then "" else $"?{queryString}")
+            + window.location.hash
+
+        relativeUrl
+
+    let private updateHistory parametersToUpdate =
+        parametersToUpdate
+        |> relativeUrlWith
+        |> BrowserInterop.replaceCurrentUrl
+
+    let private pushHistory parametersToUpdate =
+        parametersToUpdate
+        |> relativeUrlWith
+        |> BrowserInterop.pushClientUrl
+
+    let private fetchText url = async {
+        let! response =
+            fetchUnsafe url []
+            |> Async.AwaitPromise
+
+        let! body =
+            response.text ()
+            |> Async.AwaitPromise
+
+        if response.Ok then
+            return body
+        else
+            return failwith (httpFailureMessage url response body)
+    }
+
+    let private fetchBoth olderUrl newerUrl = async {
+        let! lockFiles =
+            [|
+                fetchText olderUrl
+                fetchText newerUrl
+            |]
+            |> Async.Parallel
+
+        return lockFiles.[0], lockFiles.[1]
+    }
+
+    let private finishFetching generation form olderLockFile newerLockFile =
+        if isCurrentComparison generation then
+            setNamedValue form "olderLockFile" olderLockFile
+            setNamedValue form "newerLockFile" newerLockFile
+            BrowserInterop.dispatchCustomEvent (form, LocksLoadedEvent)
+
+    let private submitUrlForm generation form = async {
+        let olderUrl = requiredValue form OlderLockFileUrlQueryParam
+        let newerUrl = requiredValue form NewerLockFileUrlQueryParam
+
+        updateHistory [
+            OlderLockFileUrlQueryParam, olderUrl
+            NewerLockFileUrlQueryParam, newerUrl
+        ]
+
+        setAllNamedValues OlderLockFileUrlQueryParam olderUrl
+        setAllNamedValues NewerLockFileUrlQueryParam newerUrl
+
+        let! olderLockFile, newerLockFile = fetchBoth olderUrl newerUrl
+        finishFetching generation form olderLockFile newerLockFile
+    }
+
+    let private submitGitHubForm generation form = async {
+        let pullRequestUrl = requiredValue form GitHubPullRequestUrlQueryParam
+        updateHistory [ GitHubPullRequestUrlQueryParam, pullRequestUrl ]
+
+        let pullRequest =
+            GitHub.tryParsePullRequestUrl pullRequestUrl
+            |> Result.defaultWith failwith
+
+        let! olderUrl, newerUrl = GitHub.discoverLockUrls pullRequest
+
+        if isCurrentComparison generation then
+            updateHistory [
+                OlderLockFileUrlQueryParam, olderUrl
+                NewerLockFileUrlQueryParam, newerUrl
+            ]
+
+            setAllNamedValues OlderLockFileUrlQueryParam olderUrl
+            setAllNamedValues NewerLockFileUrlQueryParam newerUrl
+
+        let! olderLockFile, newerLockFile = fetchBoth olderUrl newerUrl
+        finishFetching generation form olderLockFile newerLockFile
+    }
+
+    let private setFormBusy (form: HTMLFormElement) busy =
+        if busy then
+            form.setAttribute ("aria-busy", "true")
+        else
+            form.removeAttribute "aria-busy"
+
+        BrowserInterop.querySelectorAllWithin (
+            form,
+            "button[type=\"submit\"], input[type=\"submit\"]"
+        )
+        |> Array.iter (fun button -> BrowserInterop.setDisabled (button, busy))
+
+    let private startSubmission (form: HTMLFormElement) operation =
+        let generation = nextComparisonGeneration ()
+        form.setAttribute (FormGenerationAttribute, generation)
+        setFormBusy form true
+        clearClientErrors ()
+
+        async {
+            try
+                try
+                    do! operation generation form
+                with error ->
+                    if isCurrentComparison generation then
+                        showFetchError error
+            finally
+                if form.getAttribute FormGenerationAttribute = generation then
+                    form.removeAttribute FormGenerationAttribute
+                    setFormBusy form false
+        }
+        |> Async.StartImmediate
+
+    let handleSubmit (event: Event) =
+        let form = BrowserInterop.eventForm event.target
+
+        if not (isNullOrUndefined form) then
+            match form.getAttribute "data-fetch-mode" with
+            | "urls" ->
+                event.preventDefault ()
+
+                if
+                    form.getAttribute "aria-busy"
+                    <> "true"
+                    && form.reportValidity ()
+                then
+                    startSubmission form submitUrlForm
+            | "github" ->
+                event.preventDefault ()
+
+                if
+                    form.getAttribute "aria-busy"
+                    <> "true"
+                    && form.reportValidity ()
+                then
+                    startSubmission form submitGitHubForm
+            | _ ->
+                if form.getAttribute "hx-target" = "#comparison-results" then
+                    nextComparisonGeneration ()
+                    |> ignore
+
+    let private switchOutput selectedOutput =
+        BrowserInterop.querySelectorAll "[data-output-tab]"
+        |> Array.iter (fun tab ->
+            let isSelected = tab.getAttribute "data-output-tab" = selectedOutput
+            BrowserInterop.setTabActive (tab, isSelected)
+            tab.setAttribute ("aria-selected", if isSelected then "true" else "false")
+        )
+
+        BrowserInterop.querySelectorAll "[data-output-panel]"
+        |> Array.iter (fun panel ->
+            let isSelected = panel.getAttribute "data-output-panel" = selectedOutput
+            BrowserInterop.setHidden (panel, not isSelected)
+            panel.setAttribute ("aria-hidden", if isSelected then "false" else "true")
+        )
+
+    let private copyOutput (button: Element) =
+        let selector = button.getAttribute "data-copy-target"
+
+        if String.IsNullOrWhiteSpace selector then
+            failwith "The copy button does not identify an output element."
+
+        let output = document.querySelector selector
+
+        if isNullOrUndefined output then
+            failwith $"The copy target {selector} was not found."
+
+        findResultsContainer ()
+        |> Option.map (fun container -> container.querySelector "[data-client-copy-error]")
+        |> Option.filter (
+            isNullOrUndefined
+            >> not
+        )
+        |> Option.iter BrowserInterop.remove
+
+        async {
+            try
+                do!
+                    BrowserInterop.copyableText output
+                    |> BrowserInterop.writeClipboardText
+                    |> Async.AwaitPromise
+            with error ->
+                showClipboardError error
+        }
+        |> Async.StartImmediate
+
+    let private normalizeInputType =
+        function
+        | "github" -> "github"
+        | "raw" -> "raw"
+        | _ -> "url"
+
+    let private selectedInputFromQueryString () =
+        let query = BrowserInterop.createQueryParameters window.location.search
+
+        BrowserInterop.getQueryParameter (query, InputTypeQueryParam)
+        |> normalizeInputType
+
+    let private switchInput selectedInput =
+        let selectedInput = normalizeInputType selectedInput
+
+        BrowserInterop.querySelectorAll "[data-input-tab]"
+        |> Array.iter (fun tab ->
+            let isSelected = tab.getAttribute "data-input-tab" = selectedInput
+            BrowserInterop.setTabActive (tab, isSelected)
+            tab.setAttribute ("aria-selected", if isSelected then "true" else "false")
+        )
+
+        BrowserInterop.querySelectorAll "[data-input-panel]"
+        |> Array.iter (fun panel ->
+            let isSelected = panel.getAttribute "data-input-panel" = selectedInput
+            BrowserInterop.setHidden (panel, not isSelected)
+            panel.setAttribute ("aria-hidden", if isSelected then "false" else "true")
+        )
+
+    let private queryBackedInputValues () =
+        [
+            OlderLockFileUrlQueryParam
+            NewerLockFileUrlQueryParam
+            GitHubPullRequestUrlQueryParam
+        ]
+        |> List.choose (fun name ->
+            match tryFind $"[name=\"{name}\"]" with
+            | None -> None
+            | Some field -> Some(name, (BrowserInterop.value field).Trim())
+        )
+
+    let private selectInput selectedInput =
+        let selectedInput = normalizeInputType selectedInput
+        updateHistory (queryBackedInputValues ())
+
+        if
+            selectedInput
+            <> selectedInputFromQueryString ()
+        then
+            pushHistory [ InputTypeQueryParam, selectedInput ]
+
+        switchInput selectedInput
+
+    let handleClick (event: Event) =
+        let inputTab = BrowserInterop.closestFromEvent (event, "[data-input-tab]")
+
+        if not (isNullOrUndefined inputTab) then
+            event.preventDefault ()
+            selectInput (inputTab.getAttribute "data-input-tab")
+        else
+            let outputTab = BrowserInterop.closestFromEvent (event, "[data-output-tab]")
+
+            if not (isNullOrUndefined outputTab) then
+                event.preventDefault ()
+                switchOutput (outputTab.getAttribute "data-output-tab")
+            else
+                let copyButton = BrowserInterop.closestFromEvent (event, "[data-copy-target]")
+
+                if not (isNullOrUndefined copyButton) then
+                    event.preventDefault ()
+
+                    try
+                        copyOutput copyButton
+                    with error ->
+                        showClipboardError error
+
+    let hydrateInputsFromQueryString () =
+        let query = BrowserInterop.createQueryParameters window.location.search
+
+        [
+            OlderLockFileUrlQueryParam
+            NewerLockFileUrlQueryParam
+            GitHubPullRequestUrlQueryParam
+        ]
+        |> List.iter (fun name ->
+            let value = BrowserInterop.getQueryParameter (query, name)
+
+            if not (isNullOrUndefined value) then
+                BrowserInterop.querySelectorAll $"[name=\"{name}\"]"
+                |> Array.iter (fun field -> BrowserInterop.setValue (field, value))
+        )
+
+    let private autoCompareSharedUrls () =
+        let root = document.documentElement
+        let query = BrowserInterop.createQueryParameters window.location.search
+        let olderUrl = BrowserInterop.getQueryParameter (query, OlderLockFileUrlQueryParam)
+        let newerUrl = BrowserInterop.getQueryParameter (query, NewerLockFileUrlQueryParam)
+
+        if
+            root.getAttribute "data-shared-url-auto-submitted"
+            <> "true"
+            && not (String.IsNullOrWhiteSpace olderUrl)
+            && not (String.IsNullOrWhiteSpace newerUrl)
+        then
+            match tryFind "form[data-fetch-mode=\"urls\"]" with
+            | None -> ()
+            | Some form ->
+                root.setAttribute ("data-shared-url-auto-submitted", "true")
+                BrowserInterop.requestSubmit (unbox<HTMLFormElement> form)
+
+    let attach () =
+        let root = document.documentElement
+
+        if
+            root.getAttribute "data-paket-lock-client-ready"
+            <> "true"
+        then
+            root.setAttribute ("data-paket-lock-client-ready", "true")
+            BrowserInterop.addCapturingEventListener (document, "submit", handleSubmit)
+            BrowserInterop.addEventListener (document, "click", handleClick)
+
+            BrowserInterop.addEventListener (
+                document,
+                "htmx:afterSwap",
+                fun _ -> hydrateInputsFromQueryString ()
+            )
+
+            BrowserInterop.addEventListener (
+                window,
+                "popstate",
+                fun _ ->
+                    hydrateInputsFromQueryString ()
+                    switchInput (selectedInputFromQueryString ())
+            )
+
+            hydrateInputsFromQueryString ()
+            switchInput (selectedInputFromQueryString ())
+            autoCompareSharedUrls ()
+
+let initialize () =
+    if document.readyState = "loading" then
+        BrowserInterop.addEventListener (document, "DOMContentLoaded", fun _ -> Client.attach ())
     else
-        Cmd.none
-
-let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
-    match msg with
-    | OlderLockChanged olderLockFile ->
-        let model = {
-            model with
-                OlderLockFile = olderLockFile
-        }
-
-        model, requestDiff model
-    | NewerLockChanged newerLockFile ->
-        let model = {
-            model with
-                NewerLockFile = newerLockFile
-        }
-
-        model, requestDiff model
-    | RequestComparison ->
-        let compareRequest = PaketLocks.create model.OlderLockFile model.NewerLockFile
-
-        let cmd =
-            Cmd.OfAsync.either
-                paketLockDiffApi.comparePaketLocks
-                compareRequest
-                (Ok >> ComparisonFinished)
-                (Error >> ComparisonFinished)
-
-        { model with CompareResults = Loading }, cmd
-
-    | ComparisonFinished result ->
-        let compareResults =
-            match result with
-            | Ok r -> Finished r
-            | Error e -> Errored e
-
-        {
-            model with
-                CompareResults = compareResults
-        },
-        Cmd.none
-    | InputTypeChoiceChanged(ty) -> { model with InputTypeChoice = ty }, Cmd.none
-    | OutputTypeChoiceChanged(ty) -> { model with OutputTypeChoice = ty }, Cmd.none
-    | OlderLockUrlChanged(url) ->
-        let model = { model with OlderLockUrl = url }
-
-        let queryStringBuilder = URLSearchParams.Create(Dom.window.location.search)
-        queryStringBuilder.set (OlderLockFileUrlQueryParam, url)
-        let queryString = sprintf "?%s" (string queryStringBuilder)
-        Dom.window.history.replaceState (null, null, queryString)
-
-        let cmd =
-            if String.notNullOrEmpty url then
-                Cmd.OfAsync.either Fetcher.getFromUrl url (OlderLockUrlFetched) (Error >> OlderLockUrlFetched)
-            else
-                Cmd.none
-
-        model, cmd
-    | OlderLockUrlFetched(paketLockFile) ->
-        match paketLockFile with
-        | Ok file -> model, OlderLockChanged file |> Cmd.ofMsg
-        | Error e ->
-            {
-                model with
-                    CompareResults = Errored e
-            },
-            Cmd.none
-    | NewerLockUrlChanged(url) ->
-        let model = { model with NewerLockUrl = url }
-        let queryStringBuilder = URLSearchParams.Create(Dom.window.location.search)
-        queryStringBuilder.set (NewerLockFileUrlQueryParam, url)
-        let queryString = sprintf "?%s" (string queryStringBuilder)
-        Dom.window.history.replaceState (null, null, queryString)
-
-        let cmd =
-            if String.notNullOrEmpty url then
-                Cmd.OfAsync.either Fetcher.getFromUrl url (NewerLockUrlFetched) (Error >> NewerLockUrlFetched)
-            else
-                Cmd.none
-
-        model, cmd
-    | NewerLockUrlFetched(paketLockFile) ->
-        match paketLockFile with
-        | Ok file -> model, NewerLockChanged file |> Cmd.ofMsg
-        | Error e ->
-            {
-                model with
-                    CompareResults = Errored e
-            },
-            Cmd.none
-    | GitHubPRUrlChanged(url) ->
-        let model = { model with GitHubPRUrl = url }
-
-        let cmd =
-            if String.notNullOrEmpty url then
-                Cmd.OfAsync.either GitHub.fetchOldAndNewer url (Ok >> GitHubPRFetched) (Error >> GitHubPRFetched)
-            else
-                Cmd.none
-
-        model, cmd
-    | GitHubPRFetched(result) ->
-        match result with
-        | Ok(olderUrl, newerUrl) ->
-            let cmd =
-                Cmd.batch [
-                    OlderLockUrlChanged olderUrl |> Cmd.ofMsg
-                    NewerLockUrlChanged newerUrl |> Cmd.ofMsg
-                ]
-
-            model, cmd
-        | Error e ->
-            {
-                model with
-                    CompareResults = Errored e
-            },
-            Cmd.none
-    | VersionInfoFetch ->
-        let cmd =
-            Cmd.OfAsync.either paketLockDiffApi.versionInfo () (Ok >> VersionInfoFetched) (Error >> VersionInfoFetched)
-
-        model, cmd
-    | VersionInfoFetched res ->
-        match res with
-        | Ok info -> { model with VersionInfo = Some info }, Cmd.none
-        | Error e ->
-            printfn "%A" e
-            model, Cmd.none
-
-open Fable.React
-open Fable.React.Props
-// open Fulma
-open Fable.FontAwesome
-open Thoth.Json
-open Feliz
-open Feliz.Bulma
-
-let navBrand =
-    Bulma.navbarStart.div [
-        Bulma.navbarItem.a [
-            prop.href "https://github.com/TheAngryByrd/paket-lock-diff"
-            prop.children [ Fa.span [ Fa.Brand.Github; Fa.PullLeft ] []; span [] [ str " GitHub Repo" ] ]
-        ]
-        Bulma.navbarItem.a [
-            prop.href "https://github.com/fsprojects/Paket"
-            prop.children [
-                Html.img [
-                    prop.src "https://raw.githubusercontent.com/fsprojects/Paket/master/docs/files/img/logo.png"
-                    prop.alt "Logo"
-                    prop.style [ style.marginRight (length.em 0.3); style.maxHeight (length.em 1.75) ]
-                ]
-                span [] [ str "Paket" ]
-            ]
-        ]
-        Bulma.navbarItem.a [
-            prop.href "https://safe-stack.github.io/"
-            prop.children [
-                Html.img [
-                    prop.src "/favicon.png"
-                    prop.alt "Logo"
-                    prop.style [ style.marginRight (length.em 0.3); style.maxHeight (length.em 1.75) ]
-                ]
-                span [] [ str "SAFE Stack" ]
-            ]
-        ]
-
-    ]
-
-
-
-let copyToClipboard element =
-    let codeElement = document.querySelector element
-    let range = document.createRange ()
-    range.selectNode codeElement
-    window.getSelection().addRange (range)
-
-    // try
-    document.execCommand ("copy") |> ignore
-
-    window.getSelection().removeAllRanges ()
-// with
-// _ -> ()
-
-let createToClipboardElement elementToCopy =
-
-    Bulma.button.button [
-        prop.style [ style.margin (length.em 0.3) ]
-        prop.onClick (fun _ -> copyToClipboard elementToCopy)
-        prop.text "Copy to Clipboard"
-    ]
-
-let fugetLink (packageName: string) (version: string) =
-    sprintf "https://www.fuget.org/packages/%s/%s/" packageName version
-
-let fugetDiffLink (packageName: string) (oldVersion: string) (newVersion: string) =
-    // using anything for the framework moniker selects the first one. Setting it to "unknown" for now.
-    sprintf "https://www.fuget.org/packages/%s/%s/lib/unknown/diff/%s/" packageName newVersion oldVersion
-
-
-let compareResults (paketDiff: PaketDiff) (model: Model) (dispatch: Msg -> unit) =
-    let printPackageRich (xs: Shared.Package list) =
-        xs
-        |> List.groupBy (fun g -> g.GroupName)
-        |> List.collect (fun (groupName, packages) -> [
-            p [] [ str <| sprintf "%s - %d" groupName packages.Length ]
-            for x in packages do
-                p [ Style [ Margin ".3em" ] ] [
-                    a [ Href(fugetLink x.PackageName x.Version); Target "_blank" ] [
-                        str <| sprintf "\u00A0\u00A0%s - %s" x.PackageName x.Version
-                    ]
-                ]
-        ])
-
-    let markdownPrintPackage (xs: Shared.Package list) =
-        xs
-        |> List.groupBy (fun g -> g.GroupName)
-        |> List.collect (fun (groupName, packages) -> [
-            Markdown.li <| sprintf "%s - (%d)" groupName packages.Length
-            for x in packages do
-                Markdown.lii 2
-                <| sprintf "[%s - %s](%s)" x.PackageName x.Version (fugetLink x.PackageName x.Version)
-            str <| "\n"
-        ])
-
-
-    let printVersionDiff (xs: Shared.PackageVersionDiff list) =
-        xs
-        |> List.groupBy (fun g -> g.GroupName)
-        |> List.collect (fun (groupName, packages) -> [
-
-            p [] [
-                Bulma.field.div [
-                    prop.className "is-grouped-multiline"
-                    prop.children [
-                        span [ Style [ MarginRight ".5em" ] ] [ str <| sprintf "%s - %d" groupName packages.Length ]
-                    ]
-                ]
-                let createTag x length =
-                    Bulma.control.div [
-                        Bulma.tags [
-                            prop.className "has-addons"
-                            let color =
-                                match x with
-                                | Major -> "is-danger" |> Some
-                                | Minor -> "is-warning" |> Some
-                                | Patch -> "is-info" |> Some
-                                | _ -> None
-
-                            match color with
-                            | Some c ->
-                                prop.children [
-                                    Bulma.tag [
-                                        prop.className c
-
-                                        prop.text (sprintf "%A" x)
-                                    ]
-
-                                    Bulma.tag [ prop.className "is-light"; prop.text (sprintf "%d" length) ]
-                                ]
-
-                            | None -> ()
-                        ]
-                    ]
-
-                for (group, ps) in packages |> List.groupBy (fun p -> p.SemVerChange) do
-                    p [ Style [ Margin ".3em" ] ] [
-                        Bulma.field.div [
-                            prop.className "is-grouped-multiline"
-                            prop.children [ createTag group ps.Length ]
-
-                        ]
-                    ]
-
-                    for x in ps do
-                        div [ Style [ MarginRight ".5em" ] ] [
-
-                            a [
-                                Href(fugetDiffLink x.PackageName x.OlderVersion x.NewerVersion)
-                                Target "_blank"
-                            ] [
-                                str
-                                <| sprintf
-                                    "\u00A0\u00A0\u00A0\u00A0%s - %s -> %s"
-                                    x.PackageName
-                                    x.OlderVersion
-                                    x.NewerVersion
-                            ]
-                        ]
-            ]
-
-        ])
-
-
-    let printVersionDiffMarkdown (xs: Shared.PackageVersionDiff list) =
-        xs
-        |> List.groupBy (fun g -> g.GroupName)
-        |> List.collect (fun (groupName, packages) -> [
-            Markdown.li <| sprintf "%s - (%d)" groupName packages.Length
-
-            let groupTitle x length =
-                match x with
-                | Major -> sprintf "Major - (%d)" length
-                | Minor -> sprintf "Minor - (%d)" length
-                | Patch -> sprintf "Patch - (%d)" length
-                | _ -> ""
-
-            for (group, ps) in packages |> List.groupBy (fun p -> p.SemVerChange) do
-                Markdown.lii 2 <| groupTitle group ps.Length
-
-                for x in ps do
-                    Markdown.lii 4
-                    <| sprintf
-                        "[%s - %s -> %s](%s)"
-                        x.PackageName
-                        x.OlderVersion
-                        x.NewerVersion
-                        (fugetDiffLink x.PackageName x.OlderVersion x.NewerVersion)
-
-            str "\n"
-        ])
-
-
-    Bulma.container [
-        Bulma.tabs [
-            prop.className "is-fullwidth is-boxed"
-            prop.children [
-                Bulma.tab [
-                    if model.OutputTypeChoice.IsRich2 then
-                        prop.className "is-active"
-                    prop.children [
-                        a [ OnClick(fun ev -> OutputTypeChoiceChanged OutputType.Rich |> dispatch) ] [
-                            Fa.i [ Fa.IconOption.Icon "fab fa-html5" ] []
-                            span [ Style [ Margin "0 0 0 .5em" ] ] [ str "Rich" ]
-                        ]
-                    ]
-                ]
-                Bulma.tab [
-                    if model.OutputTypeChoice.IsMarkdown2 then
-                        prop.className "is-active"
-
-                    prop.children [
-                        a [ OnClick(fun ev -> OutputTypeChoiceChanged OutputType.Markdown |> dispatch) ] [
-                            Fa.i [ Fa.IconOption.Icon "fab fa-markdown" ] []
-                            span [ Style [ Margin "0 0 0 .5em" ] ] [ str "Markdown" ]
-                        ]
-                    ]
-                ]
-                Bulma.tab [
-                    if model.OutputTypeChoice.IsJson2 then
-                        prop.className "is-active"
-
-                    prop.children [
-                        a [ OnClick(fun ev -> OutputTypeChoiceChanged OutputType.Json |> dispatch) ] [
-                            span [] [ str "{ }" ]
-                            span [ Style [ Margin "0 0 0 .5em" ] ] [ str "Json" ]
-                        ]
-                    ]
-                ]
-            ]
-        ]
-        match model.OutputTypeChoice with
-        | Rich ->
-            Bulma.box [
-                Bulma.title [ str <| sprintf "Additions - %d" paketDiff.Additions.Length ]
-                yield! printPackageRich paketDiff.Additions
-            ]
-
-            Bulma.box [
-                Bulma.title [ str <| sprintf "Removals - %d" paketDiff.Removals.Length ]
-                yield! printPackageRich paketDiff.Removals
-            ]
-
-            Bulma.box [
-                Bulma.title [ str <| sprintf "Version Upgrades - %d" paketDiff.VersionUpgrades.Length ]
-                yield! printVersionDiff paketDiff.VersionUpgrades
-            ]
-
-            Bulma.box [
-                Bulma.title [ str <| sprintf "Version Downgrades - %d" paketDiff.VersionDowngrades.Length ]
-                yield! printVersionDiff paketDiff.VersionDowngrades
-            ]
-        | Markdown ->
-            createToClipboardElement "#markdown-output"
-
-            pre [ Id "markdown-output" ] [
-                code [] [
-
-                    Markdown.heading1 "Paket Lock Diff Report"
-
-                    str
-                    <| sprintf
-                        "This report was generated via [Paket Lock Diff](%s)\n\n"
-                        (Dom.window.location.ToString())
-                    Markdown.heading2 <| sprintf "Additions - (%d)" paketDiff.Additions.Length
-                    yield! markdownPrintPackage paketDiff.Additions
-                    Markdown.heading2 <| sprintf "Removals - (%d)" paketDiff.Removals.Length
-                    yield! markdownPrintPackage paketDiff.Removals
-                    Markdown.heading2
-                    <| sprintf "Version Upgrades - (%d)" paketDiff.VersionUpgrades.Length
-                    yield! printVersionDiffMarkdown paketDiff.VersionUpgrades
-                    Markdown.heading2
-                    <| sprintf "Version Downgrades - (%d)" paketDiff.VersionDowngrades.Length
-                    yield! printVersionDiffMarkdown paketDiff.VersionDowngrades
-                ]
-            ]
-        | Json ->
-            createToClipboardElement "#json-output"
-
-            pre [ Id "json-output" ] [ code [] [ str <| Json.pretty (4, paketDiff) ] ]
-    ]
-
-let rawTextDiffBoxes (model: Model) (dispatch: Msg -> unit) =
-    Bulma.columns [
-        Bulma.column [
-            prop.className "is-6"
-            prop.children [
-                Bulma.box [
-                    Bulma.field.div [
-                        Bulma.label [ prop.text "Older LockFile Text" ]
-                        Bulma.control.div [
-                            Bulma.textarea [
-                                prop.onChange (fun (x: Types.Event) -> OlderLockChanged(x.Value) |> dispatch)
-                                prop.value model.OlderLockFile
-                            ]
-                        ]
-                    ]
-                ]
-            ]
-        ]
-        Bulma.column [
-            prop.className "is-6"
-            prop.children [
-                Bulma.box [
-                    Bulma.field.div [
-                        Bulma.label [ prop.text "Newer LockFile Text" ]
-                        Bulma.control.div [
-                            Bulma.textarea [
-                                prop.onChange (fun (x: Types.Event) -> NewerLockChanged(x.Value) |> dispatch)
-                                prop.value model.NewerLockFile
-                            ]
-                        ]
-                    ]
-                ]
-            ]
-        ]
-    ]
-
-let urlDiffBoxes (model: Model) (dispatch: Msg -> unit) =
-
-    Bulma.columns [
-        Bulma.column [
-            prop.className "is-6"
-            prop.children [
-                Bulma.box [
-                    Bulma.field.div [
-                        Bulma.label [ prop.text "Older LockFile Url" ]
-                        Bulma.control.div [
-                            Bulma.input.text [
-                                prop.onChange (fun (x: Types.Event) -> OlderLockUrlChanged(x.Value) |> dispatch)
-                                prop.value model.OlderLockUrl
-                            ]
-                        ]
-                    ]
-                ]
-            ]
-        ]
-        Bulma.column [
-            prop.className "is-6"
-            prop.children [
-                Bulma.box [
-                    Bulma.field.div [
-                        Bulma.label [ prop.text "Newer LockFile Url" ]
-                        Bulma.control.div [
-                            Bulma.input.text [
-                                prop.onChange (fun (x: Types.Event) -> NewerLockUrlChanged(x.Value) |> dispatch)
-                                prop.value model.NewerLockUrl
-                            ]
-                        ]
-                    ]
-                ]
-            ]
-        ]
-    ]
-
-let githubPRBoxes (model: Model) (dispatch: Msg -> unit) =
-
-    Bulma.columns [
-        Bulma.column [
-            prop.className "is-full"
-            prop.children [
-                Bulma.box [
-                    Bulma.field.div [
-                        Bulma.label [ prop.text "GitHub Pull Request Url" ]
-                        Bulma.control.div [
-                            Bulma.input.text [
-                                prop.onChange (fun (x: Types.Event) -> GitHubPRUrlChanged(x.Value) |> dispatch)
-                                prop.value model.GitHubPRUrl
-                            ]
-                        ]
-                    ]
-                ]
-            ]
-        ]
-    ]
-
-
-let footer (model: Model) dispatch =
-    match model.VersionInfo with
-    | Some info ->
-
-        Bulma.columns [
-            Bulma.column [ p [] [ str $"Paket.Core Version {info.PaketCore}" ] ]
-            Bulma.column [ p [] [ str $"paket-lock-diff Version {info.PaketLockDiff}" ] ]
-        ]
-    | None -> nothing
-
-let view (model: Model) (dispatch: Msg -> unit) =
-    div [ Class "flex-wrapper" ] [
-        Bulma.navbar [ prop.children [ Bulma.container [ navBrand ] ] ]
-
-        Bulma.section [
-            Bulma.container [
-                Bulma.column [
-
-                    Bulma.title [ prop.text "Paket Diff Tool"; prop.className "has-text-centered" ]
-                    Bulma.tabs [
-                        prop.className "is-fullwidth is-boxed"
-                        prop.children [
-                            Bulma.tab [
-                                if model.InputTypeChoice.IsUrl2 then
-                                    prop.className "is-active"
-                                prop.children [
-                                    Html.a [
-                                        Fa.i [ Fa.IconOption.Icon "fas fa-link" ] []
-                                        span [ Style [ Margin "0 0 0 .5em" ] ] [ str "Url" ]
-                                    ]
-                                ]
-                                prop.onClick (fun _ -> InputTypeChoiceChanged InputType.Url |> dispatch)
-                            ]
-                            Bulma.tab [
-                                if model.InputTypeChoice.IsGitHubPR2 then
-                                    prop.className "is-active"
-                                prop.children [
-                                    Html.a [
-                                        Fa.i [ Fa.IconOption.Icon "fab fa-github" ] []
-                                        span [ Style [ Margin "0 0 0 .5em" ] ] [ str "GitHub Pull Request" ]
-                                    ]
-                                ]
-                                prop.onClick (fun _ -> InputTypeChoiceChanged InputType.GitHubPR |> dispatch)
-                            ]
-                            Bulma.tab [
-                                if model.InputTypeChoice.IsRawText2 then
-                                    prop.className "is-active"
-                                prop.children [
-                                    Html.a [
-                                        Fa.i [ Fa.IconOption.Icon "fas fa-file-alt" ] []
-                                        span [ Style [ Margin "0 0 0 .5em" ] ] [ str "Raw Text" ]
-                                    ]
-                                ]
-                                prop.onClick (fun _ -> InputTypeChoiceChanged InputType.RawText |> dispatch)
-                            ]
-                        ]
-                    ]
-
-                    match model.InputTypeChoice with
-                    | InputType.RawText -> rawTextDiffBoxes model dispatch
-                    | InputType.Url -> urlDiffBoxes model dispatch
-                    | InputType.GitHubPR -> githubPRBoxes model dispatch
-                ]
-            ]
-        ]
-        Bulma.section [
-            match model.CompareResults with
-            | Finished m -> compareResults m model dispatch
-            | Loading ->
-                Bulma.container [
-                    Bulma.progress [ prop.className "is-primary is-small" ]
-
-                ]
-            | Errored e ->
-                match e with
-                | :? ProxyRequestException as e ->
-                    let er = Decode.Auto.fromString<ErrorResponse<ParseError>> e.ResponseText
-
-                    let errorElems =
-                        match er with
-                        | Ok er -> [
-                            div [ Class "block" ] [ str <| sprintf "%A" er.error.Message ]
-                            div [ Class "block" ] [ str <| sprintf "%A" er.error.InnerMessage ]
-                            div [ Class "block" ] [ str <| sprintf "%A" er.error.StackTrace ]
-                          ]
-                        | Error _ -> [ div [ Class "block" ] [ str <| sprintf "%A" e.Message ] ]
-
-                    Bulma.notification [
-                        prop.className "is-danger"
-                        prop.children [ Bulma.title [ str "Error" ]; yield! errorElems ]
-                    ]
-                | e ->
-                    Bulma.notification [
-
-                        prop.className "is-danger"
-                        prop.children [
-                            Bulma.title [ str "Error" ]
-                            div [ Class "block" ] [ str <| sprintf "%A" e.Message ]
-                            div [ Class "block" ] [ str <| sprintf "%A" e.StackTrace ]
-                        ]
-                    ]
-            | NotStarted -> nothing
-        ]
-
-
-        Bulma.footer [ footer model dispatch ]
-    ]
+        Client.attach ()

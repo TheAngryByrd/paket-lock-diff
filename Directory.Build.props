@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Paket materializes its resolved graph as PackageReference items; NuGet 10 otherwise treats some as removable direct references. -->
+    <RestoreEnablePackagePruning>false</RestoreEnablePackagePruning>
+  </PropertyGroup>
+</Project>

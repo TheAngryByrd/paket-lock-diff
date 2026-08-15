@@ -1,18 +1,22 @@
 module Shared.Tests
 
-#if FABLE_COMPILER
-open Fable.Mocha
-#else
 open Expecto
-#endif
 
 open Shared
 
 let shared =
     testList "Shared" [
-        testCase "Empty string is not a valid description"
+        testCase "PaketLocks.create preserves both lock files"
         <| fun _ ->
-            let expected = false
-            let actual = Todo.isValid ""
-            Expect.equal actual expected "Should be false"
+            let actual = PaketLocks.create "older contents" "newer contents"
+
+            Expect.equal
+                actual.OlderLockFile
+                "older contents"
+                "The older lock file should be preserved"
+
+            Expect.equal
+                actual.NewerLockFile
+                "newer contents"
+                "The newer lock file should be preserved"
     ]

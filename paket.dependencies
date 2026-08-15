@@ -4,6 +4,7 @@ storage: none
 
 nuget Expecto ~> 11
 nuget FSharp.Core ~> 10
+nuget Microsoft.Playwright = 1.62.0
 nuget Giraffe ~> 8
 nuget Giraffe.Htmx ~> 2
 nuget Giraffe.ViewEngine.Htmx ~> 2

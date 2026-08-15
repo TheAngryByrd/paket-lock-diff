@@ -28,6 +28,9 @@ let private ComparisonGenerationAttribute = "data-comparison-generation"
 [<Literal>]
 let private FormGenerationAttribute = "data-fetch-generation"
 
+[<Literal>]
+let private SelectedOutputAttribute = "data-selected-output"
+
 let private httpFailureMessage url (response: Response) body =
     let status =
         if String.IsNullOrWhiteSpace response.StatusText then
@@ -653,7 +656,16 @@ module private Client =
                     nextComparisonGeneration ()
                     |> ignore
 
+    let private normalizeOutput =
+        function
+        | "markdown" -> "markdown"
+        | "json" -> "json"
+        | _ -> "rich"
+
     let private switchOutput selectedOutput =
+        let selectedOutput = normalizeOutput selectedOutput
+        document.documentElement.setAttribute (SelectedOutputAttribute, selectedOutput)
+
         BrowserInterop.querySelectorAll "[data-output-tab]"
         |> Array.iter (fun tab ->
             let isSelected = tab.getAttribute "data-output-tab" = selectedOutput
@@ -667,6 +679,12 @@ module private Client =
             BrowserInterop.setHidden (panel, not isSelected)
             panel.setAttribute ("aria-hidden", if isSelected then "false" else "true")
         )
+
+    let private restoreSelectedOutput () =
+        let selectedOutput = document.documentElement.getAttribute SelectedOutputAttribute
+
+        if not (String.IsNullOrWhiteSpace selectedOutput) then
+            switchOutput selectedOutput
 
     let private copyOutput (button: Element) =
         let selector = button.getAttribute "data-copy-target"
@@ -822,7 +840,9 @@ module private Client =
             BrowserInterop.addEventListener (
                 document,
                 "htmx:afterSwap",
-                fun _ -> hydrateInputsFromQueryString ()
+                fun _ ->
+                    hydrateInputsFromQueryString ()
+                    restoreSelectedOutput ()
             )
 
             BrowserInterop.addEventListener (

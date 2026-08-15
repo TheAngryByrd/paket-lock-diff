@@ -18,7 +18,7 @@ When looking at git diffs between two lock files, it can be hard to get an overa
 1. [Give it a try here](https://paket-lock-diff.azurewebsites.net/)
 2. Copy and paste [this lock file](https://raw.githubusercontent.com/TheAngryByrd/MiniScaffold/0.22.0/paket.lock) into `Older LockFile` field.
 3. Copy and paste [this lock file](https://raw.githubusercontent.com/TheAngryByrd/MiniScaffold/master/paket.lock) into `Newer LockFile` field.
-4. The app should analyze the lock files and give you some results.
+4. Select **Raw Text**, click **Compare**, and review the results.
 
 ---
 ## Architecture
@@ -62,6 +62,32 @@ To run all server and client tests once:
 ```bash
 dotnet run -- RunTestsHeadless
 ```
+
+The original browser workflows are covered by Playwright tests written in F#.
+This target builds a production-style server, installs the matching Chromium
+revision, and runs the browser suite headlessly:
+
+```bash
+dotnet run -- RunBrowserTests
+```
+
+For an interactive browser run, use:
+
+```bash
+dotnet run -- RunBrowserTestsHeaded
+```
+
+To run the fast server/client tests and the browser suite together:
+
+```bash
+dotnet run -- RunAllTestsHeadless
+```
+
+Playwright traces, screenshots, browser errors, and server logs from failed
+scenarios are written beneath `.artifacts/e2e/results`. Linux environments must
+provide Playwright's Chromium system dependencies; the test executable also
+supports `install --with-deps chromium` for CI images that permit installing
+them.
 
 To run server and client tests in watch mode (you can run this command in a
 second terminal):

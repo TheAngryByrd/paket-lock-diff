@@ -15,6 +15,10 @@ let deployPath = Path.getFullName "deploy"
 let sharedTestsPath = Path.getFullName "tests/Shared"
 let serverTestsPath = Path.getFullName "tests/Server"
 let clientTestsPath = Path.getFullName "tests/Client"
+let browserTestsPath = Path.getFullName "tests/Browser"
+let browserArtifactsPath = Path.getFullName ".artifacts/e2e"
+let browserServerPath = Path.combine browserArtifactsPath "server"
+let browserResultsPath = Path.combine browserArtifactsPath "results"
 
 let release = ReleaseNotes.load "RELEASE_NOTES.md"
 
@@ -23,11 +27,35 @@ let buildVersion = [
     $"/p:AssemblyVersion={release.NugetVersion}"
 ]
 
+let compileClient () =
+    run
+        dotnet
+        [
+            "fable"
+            "-o"
+            clientOutputPath
+        ]
+        clientPath
+
+let publishServer (outputPath: string) =
+    run
+        dotnet
+        [
+            "publish"
+            "-c"
+            "Release"
+            "-o"
+            outputPath
+            yield! buildVersion
+        ]
+        serverPath
+
 Target.create
     "Clean"
     (fun _ ->
         Shell.cleanDir deployPath
         Shell.cleanDir clientOutputPath
+        Shell.cleanDir browserArtifactsPath
 
         run
             dotnet
@@ -44,26 +72,8 @@ Target.create "RestoreClientDependencies" (fun _ -> run npm [ "ci" ] ".")
 Target.create
     "Bundle"
     (fun _ ->
-        run
-            dotnet
-            [
-                "fable"
-                "-o"
-                clientOutputPath
-            ]
-            clientPath
-
-        run
-            dotnet
-            [
-                "publish"
-                "-c"
-                "Release"
-                "-o"
-                deployPath
-                yield! buildVersion
-            ]
-            serverPath
+        compileClient ()
+        publishServer deployPath
     )
 
 Target.create
@@ -99,14 +109,7 @@ Target.create
 
         run dotnet [ "build" ] sharedPath
 
-        run
-            dotnet
-            [
-                "fable"
-                "-o"
-                clientOutputPath
-            ]
-            clientPath
+        compileClient ()
 
         [
             "server",
@@ -191,6 +194,68 @@ Target.create
     )
 
 Target.create
+    "BuildBrowserTests"
+    (fun _ ->
+        Shell.cleanDir browserServerPath
+        Shell.cleanDir browserResultsPath
+        compileClient ()
+        publishServer browserServerPath
+
+        run
+            dotnet
+            [
+                "build"
+                "-c"
+                "Release"
+            ]
+            browserTestsPath
+    )
+
+Target.create
+    "InstallBrowserTests"
+    (fun _ ->
+        run
+            dotnet
+            [
+                "run"
+                "-c"
+                "Release"
+                "--no-build"
+                "--no-restore"
+                "--"
+                "install"
+                "chromium"
+            ]
+            browserTestsPath
+    )
+
+let runBrowserTests headed =
+    run
+        dotnet
+        [
+            "run"
+            "-c"
+            "Release"
+            "--no-build"
+            "--no-restore"
+            "--"
+            "--server-dll"
+            Path.combine browserServerPath "Server.dll"
+            "--artifacts"
+            browserResultsPath
+
+            if headed then
+                "--headed"
+
+            "--fail-on-focused-tests"
+        ]
+        browserTestsPath
+
+Target.create "RunBrowserTests" (fun _ -> runBrowserTests false)
+Target.create "RunBrowserTestsHeaded" (fun _ -> runBrowserTests true)
+Target.create "RunAllTestsHeadless" ignore
+
+Target.create
     "Format"
     (fun _ ->
         run
@@ -216,6 +281,19 @@ let dependencies = [
     ==> "RunTestsHeadless"
     "RestoreClientDependencies"
     ==> "WatchRunTests"
+
+    "BuildBrowserTests"
+    ==> "InstallBrowserTests"
+    ==> "RunBrowserTests"
+
+    "InstallBrowserTests"
+    ==> "RunBrowserTestsHeaded"
+
+    "RunTestsHeadless"
+    ==> "RunAllTestsHeadless"
+
+    "RunBrowserTests"
+    ==> "RunAllTestsHeadless"
 ]
 
 [<EntryPoint>]

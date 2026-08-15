@@ -3,6 +3,7 @@
 *.fs.js.map
 .fake/
 .farmer/
+.artifacts/
 .idea/
 .ionide/
 .vs/

@@ -16,6 +16,12 @@ module Views =
         | GitHubPullRequest
         | RawText
 
+    type InputUrls = {
+        OlderLockFileUrl: string
+        NewerLockFileUrl: string
+        GitHubPullRequestUrl: string
+    }
+
     module InputType =
         let parse value =
             match value with
@@ -76,14 +82,14 @@ module Views =
             ]
         ]
 
-    let private inputUrl inputType olderUrl newerUrl githubUrl =
+    let private inputUrl inputType inputUrls =
         let slug = InputType.slug inputType
 
         [
             "input", slug
-            "olderLockFileUrl", olderUrl
-            "newerLockFileUrl", newerUrl
-            "githubPullRequestUrl", githubUrl
+            "olderLockFileUrl", inputUrls.OlderLockFileUrl
+            "newerLockFileUrl", inputUrls.NewerLockFileUrl
+            "githubPullRequestUrl", inputUrls.GitHubPullRequestUrl
         ]
         |> List.choose (fun (name, value) ->
             if String.IsNullOrWhiteSpace value then
@@ -94,9 +100,9 @@ module Views =
         |> String.concat "&"
         |> sprintf "/?%s"
 
-    let private inputTab selected inputType iconClass olderUrl newerUrl githubUrl =
+    let private inputTab selected inputType iconClass inputUrls =
         let slug = InputType.slug inputType
-        let url = inputUrl inputType olderUrl newerUrl githubUrl
+        let url = inputUrl inputType inputUrls
 
         li [
             if selected = inputType then
@@ -281,7 +287,7 @@ module Views =
             ]
             content
 
-    let inputSection selected olderUrl newerUrl githubUrl =
+    let inputSection selected inputUrls =
         section [
             _id "input-section"
             _class "section"
@@ -291,31 +297,21 @@ module Views =
                     h1 [ _class "title has-text-centered" ] [ str "Paket Diff Tool" ]
                     div [ _class "tabs is-fullwidth is-boxed" ] [
                         ul [] [
-                            inputTab
-                                selected
-                                InputType.Url
-                                "fa-solid fa-link"
-                                olderUrl
-                                newerUrl
-                                githubUrl
+                            inputTab selected InputType.Url "fa-solid fa-link" inputUrls
                             inputTab
                                 selected
                                 InputType.GitHubPullRequest
                                 "fa-brands fa-github"
-                                olderUrl
-                                newerUrl
-                                githubUrl
-                            inputTab
-                                selected
-                                InputType.RawText
-                                "fa-solid fa-file-lines"
-                                olderUrl
-                                newerUrl
-                                githubUrl
+                                inputUrls
+                            inputTab selected InputType.RawText "fa-solid fa-file-lines" inputUrls
                         ]
                     ]
-                    inputPanel selected InputType.Url [ urlForm olderUrl newerUrl ]
-                    inputPanel selected InputType.GitHubPullRequest [ githubForm githubUrl ]
+                    inputPanel selected InputType.Url [
+                        urlForm inputUrls.OlderLockFileUrl inputUrls.NewerLockFileUrl
+                    ]
+                    inputPanel selected InputType.GitHubPullRequest [
+                        githubForm inputUrls.GitHubPullRequestUrl
+                    ]
                     inputPanel selected InputType.RawText [ rawTextForm ]
                     progress [
                         _id "comparison-progress"
@@ -581,7 +577,7 @@ module Views =
             ]
         ]
 
-    let page inputType olderUrl newerUrl githubUrl versionInfo =
+    let page inputType inputUrls versionInfo =
         html [ _lang "en" ] [
             head [] [
                 meta [ _charset "utf-8" ]
@@ -619,7 +615,7 @@ module Views =
                 div [ _class "flex-wrapper" ] [
                     div [] [
                         navBar
-                        inputSection inputType olderUrl newerUrl githubUrl
+                        inputSection inputType inputUrls
                         section [ _class "section" ] [ div [ _id "comparison-results" ] [] ]
                     ]
                     footerView versionInfo

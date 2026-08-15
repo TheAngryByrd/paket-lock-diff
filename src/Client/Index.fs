@@ -306,8 +306,8 @@ module GitHub =
 
         contents.download_url
 
-    /// Finds the default-branch and pull-request versions of paket.lock by using
-    /// the same GitHub contents and pull-files APIs as the original client.
+    /// Resolves download URLs for the root paket.lock on the repository's
+    /// default branch and pull-request revision through GitHub's APIs.
     let discoverLockUrls info = async {
         let repositoryApi = $"https://api.github.com/repos/{info.Owner}/{info.Repository}"
 
@@ -628,29 +628,23 @@ module private Client =
         }
         |> Async.StartImmediate
 
+    let private handleFetchSubmission (event: Event) (form: HTMLFormElement) operation =
+        event.preventDefault ()
+
+        if
+            form.getAttribute "aria-busy"
+            <> "true"
+            && form.reportValidity ()
+        then
+            startSubmission form operation
+
     let handleSubmit (event: Event) =
         let form = BrowserInterop.eventForm event.target
 
         if not (isNullOrUndefined form) then
             match form.getAttribute "data-fetch-mode" with
-            | "urls" ->
-                event.preventDefault ()
-
-                if
-                    form.getAttribute "aria-busy"
-                    <> "true"
-                    && form.reportValidity ()
-                then
-                    startSubmission form submitUrlForm
-            | "github" ->
-                event.preventDefault ()
-
-                if
-                    form.getAttribute "aria-busy"
-                    <> "true"
-                    && form.reportValidity ()
-                then
-                    startSubmission form submitGitHubForm
+            | "urls" -> handleFetchSubmission event form submitUrlForm
+            | "github" -> handleFetchSubmission event form submitGitHubForm
             | _ ->
                 if form.getAttribute "hx-target" = "#comparison-results" then
                     nextComparisonGeneration ()
@@ -662,23 +656,25 @@ module private Client =
         | "json" -> "json"
         | _ -> "rich"
 
-    let private switchOutput selectedOutput =
-        let selectedOutput = normalizeOutput selectedOutput
-        document.documentElement.setAttribute (SelectedOutputAttribute, selectedOutput)
-
-        BrowserInterop.querySelectorAll "[data-output-tab]"
+    let private updateTabAndPanelSelection tabAttribute panelAttribute selected =
+        BrowserInterop.querySelectorAll $"[{tabAttribute}]"
         |> Array.iter (fun tab ->
-            let isSelected = tab.getAttribute "data-output-tab" = selectedOutput
+            let isSelected = tab.getAttribute tabAttribute = selected
             BrowserInterop.setTabActive (tab, isSelected)
             tab.setAttribute ("aria-selected", if isSelected then "true" else "false")
         )
 
-        BrowserInterop.querySelectorAll "[data-output-panel]"
+        BrowserInterop.querySelectorAll $"[{panelAttribute}]"
         |> Array.iter (fun panel ->
-            let isSelected = panel.getAttribute "data-output-panel" = selectedOutput
+            let isSelected = panel.getAttribute panelAttribute = selected
             BrowserInterop.setHidden (panel, not isSelected)
             panel.setAttribute ("aria-hidden", if isSelected then "false" else "true")
         )
+
+    let private switchOutput selectedOutput =
+        let selectedOutput = normalizeOutput selectedOutput
+        document.documentElement.setAttribute (SelectedOutputAttribute, selectedOutput)
+        updateTabAndPanelSelection "data-output-tab" "data-output-panel" selectedOutput
 
     let private restoreSelectedOutput () =
         let selectedOutput = document.documentElement.getAttribute SelectedOutputAttribute
@@ -730,20 +726,7 @@ module private Client =
 
     let private switchInput selectedInput =
         let selectedInput = normalizeInputType selectedInput
-
-        BrowserInterop.querySelectorAll "[data-input-tab]"
-        |> Array.iter (fun tab ->
-            let isSelected = tab.getAttribute "data-input-tab" = selectedInput
-            BrowserInterop.setTabActive (tab, isSelected)
-            tab.setAttribute ("aria-selected", if isSelected then "true" else "false")
-        )
-
-        BrowserInterop.querySelectorAll "[data-input-panel]"
-        |> Array.iter (fun panel ->
-            let isSelected = panel.getAttribute "data-input-panel" = selectedInput
-            BrowserInterop.setHidden (panel, not isSelected)
-            panel.setAttribute ("aria-hidden", if isSelected then "false" else "true")
-        )
+        updateTabAndPanelSelection "data-input-tab" "data-input-panel" selectedInput
 
     let private queryBackedInputValues () =
         [
@@ -849,6 +832,7 @@ module private Client =
                 window,
                 "popstate",
                 fun _ ->
+                    updateHistory (queryBackedInputValues ())
                     hydrateInputsFromQueryString ()
                     switchInput (selectedInputFromQueryString ())
             )

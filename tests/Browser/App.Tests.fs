@@ -777,6 +777,117 @@ module AppTests =
 
             BrowserFixture.testCase
                 configuration
+                "query-backed drafts survive Back edit and Forward navigation"
+            <| fun page -> async {
+                let initialOlderUrl = "https://draft.example/older.lock"
+                let initialNewerUrl = "https://draft.example/newer.lock"
+                let editedOlderUrl = "https://edited.example/older.lock"
+                let editedNewerUrl = "https://edited.example/newer.lock"
+
+                let editedGitHubUrl =
+                    Fixtures.GitHubPullRequestUrl
+                    + ".diff"
+
+                do! BrowserFixture.gotoReady page "/"
+
+                do!
+                    page.Locator("#older-lock-url").FillAsync initialOlderUrl
+                    |> awaitTask
+
+                do!
+                    page.Locator("#newer-lock-url").FillAsync initialNewerUrl
+                    |> awaitTask
+
+                do! selectInput page "github"
+
+                do!
+                    page.Locator("#github-pr-url").FillAsync Fixtures.GitHubPullRequestUrl
+                    |> awaitTask
+
+                do! selectInput page "raw"
+
+                let! _ =
+                    page.GoBackAsync()
+                    |> Async.AwaitTask
+
+                do!
+                    page.Locator("#github-pr-url").FillAsync editedGitHubUrl
+                    |> awaitTask
+
+                let! _ =
+                    page.GoForwardAsync()
+                    |> Async.AwaitTask
+
+                let! githubUrlAfterForward =
+                    page.Locator("#github-pr-url").InputValueAsync()
+                    |> Async.AwaitTask
+
+                Expect.equal
+                    githubUrlAfterForward
+                    editedGitHubUrl
+                    "Forward navigation should preserve a GitHub draft edited after Back"
+
+                do!
+                    expectQueryParameter
+                        page
+                        "githubPullRequestUrl"
+                        editedGitHubUrl
+                        "Forward navigation should persist the edited GitHub draft exactly once"
+
+                do! selectInput page "url"
+                do! selectInput page "github"
+
+                let! _ =
+                    page.GoBackAsync()
+                    |> Async.AwaitTask
+
+                do!
+                    page.Locator("#older-lock-url").FillAsync editedOlderUrl
+                    |> awaitTask
+
+                do!
+                    page.Locator("#newer-lock-url").FillAsync editedNewerUrl
+                    |> awaitTask
+
+                let! _ =
+                    page.GoForwardAsync()
+                    |> Async.AwaitTask
+
+                let! olderUrlAfterForward =
+                    page.Locator("#older-lock-url").InputValueAsync()
+                    |> Async.AwaitTask
+
+                let! newerUrlAfterForward =
+                    page.Locator("#newer-lock-url").InputValueAsync()
+                    |> Async.AwaitTask
+
+                Expect.equal
+                    olderUrlAfterForward
+                    editedOlderUrl
+                    "Forward navigation should preserve an older URL draft edited after Back"
+
+                Expect.equal
+                    newerUrlAfterForward
+                    editedNewerUrl
+                    "Forward navigation should preserve a newer URL draft edited after Back"
+
+                do!
+                    expectQueryParameter
+                        page
+                        "olderLockFileUrl"
+                        editedOlderUrl
+                        "Forward navigation should persist the edited older URL exactly once"
+
+                do!
+                    expectQueryParameter
+                        page
+                        "newerLockFileUrl"
+                        editedNewerUrl
+                        "Forward navigation should persist the edited newer URL exactly once"
+            }
+
+            BrowserFixture.testCase
+                configuration
                 "copy buttons copy the exact Markdown and JSON reports"
             <| fun page -> async {
                 do! BrowserFixture.gotoReady page "/"

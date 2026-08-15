@@ -186,8 +186,14 @@ let viewTests =
                 PaketLockDiff = "2.0.0"
             }
 
+            let inputUrls: Views.InputUrls = {
+                OlderLockFileUrl = "https://example.com/old?a=1&b=2"
+                NewerLockFileUrl = ""
+                GitHubPullRequestUrl = ""
+            }
+
             let markup =
-                Views.page Views.InputType.Url "https://example.com/old?a=1&b=2" "" "" versionInfo
+                Views.page Views.InputType.Url inputUrls versionInfo
                 |> RenderView.AsString.htmlNode
 
             Expect.stringContains

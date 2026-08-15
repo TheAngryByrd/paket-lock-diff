@@ -86,16 +86,18 @@ module Handlers =
                 queryValue "input" ctx
                 |> Views.InputType.parse
 
-            let olderUrl = queryValue "olderLockFileUrl" ctx
-            let newerUrl = queryValue "newerLockFileUrl" ctx
-            let githubUrl = queryValue "githubPullRequestUrl" ctx
+            let inputUrls: Views.InputUrls = {
+                OlderLockFileUrl = queryValue "olderLockFileUrl" ctx
+                NewerLockFileUrl = queryValue "newerLockFileUrl" ctx
+                GitHubPullRequestUrl = queryValue "githubPullRequestUrl" ctx
+            }
 
             if ctx.Request.IsHtmx then
-                Views.inputSection inputType olderUrl newerUrl githubUrl
+                Views.inputSection inputType inputUrls
                 |> htmlFragment
                 |> fun handler -> handler next ctx
             else
-                Views.page inputType olderUrl newerUrl githubUrl (versionInfo ())
+                Views.page inputType inputUrls (versionInfo ())
                 |> htmlView
                 |> fun handler -> handler next ctx
 
